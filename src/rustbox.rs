@@ -137,7 +137,7 @@ pub fn change_cell(x: uint, y: uint, ch: u32, fg: u16, bg: u16) {
     }
 }
 
-pub fn print(x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: Box<&str>) {
+pub fn print(x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: &'static str) {
     let fg: u16 = convert_color(fg) | convert_style(sty);
     let bg: u16 = convert_color(bg);
     for (i, ch) in s.chars().enumerate() {
