@@ -1,7 +1,7 @@
 [project]
 name = "rustbox"
 version = "0.1.0"
-authors = ["gregchapple1@gmail.com"]
+authors = ["Greg Chapple <gregchapple1@gmail.com>"]
 
 [[lib]]
 name = "rustbox"
