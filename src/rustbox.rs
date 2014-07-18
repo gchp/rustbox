@@ -145,6 +145,12 @@ pub fn print(x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: &'static str
     }
 }
 
+pub fn print_char(x: uint, y: uint, sty: Style, fg: Color, bg: Color, ch: char) {
+    let fg: u16 = convert_color(fg) | convert_style(sty);
+    let bg: u16 = convert_color(bg);
+    change_cell(x, y, ch as u32, fg, bg);
+}
+
 pub fn poll_event() -> Event {
     unsafe {
         let ev = nil_raw_event();
