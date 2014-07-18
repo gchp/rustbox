@@ -1,4 +1,4 @@
-[package]
+[project]
 name = "rustbox"
 version = "0.1.0"
 authors = ["gregchapple1@gmail.com"]
