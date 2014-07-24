@@ -34,7 +34,7 @@ extern crate rustbox;
 
 fn main() {
     rustbox::init();
-    rustbox::print(1, 1, rustbox::Bold, rustbox::White, rustbox::Black, ~"Hello, world!");
+    rustbox::print(1, 1, rustbox::Bold, rustbox::White, rustbox::Black, "Hello, world!");
     rustbox::present();
 
     std::io::timer::sleep(1000);
