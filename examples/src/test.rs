@@ -4,8 +4,8 @@ use std::char;
 
 fn main() {
     rustbox::init();
-    rustbox::print(1, 1, rustbox::Bold, rustbox::White, rustbox::Black, "Hello, world!");
-    rustbox::print(1, 3, rustbox::Bold, rustbox::White, rustbox::Black, "Press 'q' to quit.");
+    rustbox::print(1, 1, rustbox::Bold, rustbox::White, rustbox::Black, "Hello, world!".to_string());
+    rustbox::print(1, 3, rustbox::Bold, rustbox::White, rustbox::Black, "Press 'q' to quit.".to_string());
     rustbox::present();
 
     loop {
