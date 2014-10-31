@@ -75,7 +75,7 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> Event {
         2 => {
             return ResizeEvent(ev.w, ev.h);
         },
-        _ => { fail!("Unknown event"); }
+        _ => { panic!("Unknown event"); }
     }
 }
 
