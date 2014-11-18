@@ -1,5 +1,4 @@
 #![feature(link_args)]
-#![feature(struct_variant)]
 
 extern crate libc;
 use libc::types::os::arch::c95::{c_int, c_uint};
@@ -68,12 +67,12 @@ fn nil_raw_event() -> RawEvent {
 
 fn unpack_event(ev_type: c_int, ev: &RawEvent) -> Event {
     match ev_type {
-        0 => NoEvent,
+        0 => Event::NoEvent,
         1 => {
-            return KeyEvent(ev.emod, ev.key, ev.ch);
+            return Event::KeyEvent(ev.emod, ev.key, ev.ch);
         },
         2 => {
-            return ResizeEvent(ev.w, ev.h);
+            return Event::ResizeEvent(ev.w, ev.h);
         },
         _ => { panic!("Unknown event"); }
     }
@@ -81,23 +80,23 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> Event {
 
 pub fn convert_color(c: Color) -> u16 {
     match c {
-        Black   => 0x00,
-        Red     => 0x01,
-        Green   => 0x02,
-        Yellow  => 0x03,
-        Blue    => 0x04,
-        Magenta => 0x05,
-        Cyan    => 0x06,
-        White   => 0x07,
+        Color::Black   => 0x00,
+        Color::Red     => 0x01,
+        Color::Green   => 0x02,
+        Color::Yellow  => 0x03,
+        Color::Blue    => 0x04,
+        Color::Magenta => 0x05,
+        Color::Cyan    => 0x06,
+        Color::White   => 0x07,
     }
 }
 
 pub fn convert_style(sty: Style) -> u16 {
     match sty {
-        Normal         => 0x00,
-        Bold           => 0x10,
-        Underline      => 0x20,
-        BoldUnderline => 0x30,
+        Style::Normal         => 0x00,
+        Style::Bold           => 0x10,
+        Style::Underline      => 0x20,
+        Style::BoldUnderline => 0x30,
     }
 }
 
