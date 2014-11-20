@@ -19,6 +19,7 @@ pub enum Event {
 }
 
 pub enum Color {
+    Default,
     Black,
     Red,
     Green,
@@ -33,7 +34,8 @@ pub enum Style {
     Normal,
     Bold,
     Underline,
-    BoldUnderline
+    BoldUnderline,
+    Reverse
 }
 
 mod termbox {
@@ -80,23 +82,25 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> Event {
 
 pub fn convert_color(c: Color) -> u16 {
     match c {
-        Color::Black   => 0x00,
-        Color::Red     => 0x01,
-        Color::Green   => 0x02,
-        Color::Yellow  => 0x03,
-        Color::Blue    => 0x04,
-        Color::Magenta => 0x05,
-        Color::Cyan    => 0x06,
-        Color::White   => 0x07,
+        Color::Default => 0x00,
+        Color::Black   => 0x01,
+        Color::Red     => 0x02,
+        Color::Green   => 0x03,
+        Color::Yellow  => 0x04,
+        Color::Blue    => 0x05,
+        Color::Magenta => 0x06,
+        Color::Cyan    => 0x07,
+        Color::White   => 0x08,
     }
 }
 
 pub fn convert_style(sty: Style) -> u16 {
     match sty {
-        Style::Normal         => 0x00,
-        Style::Bold           => 0x10,
-        Style::Underline      => 0x20,
-        Style::BoldUnderline => 0x30,
+        Style::Normal         => 0x0000,
+        Style::Bold           => 0x0100,
+        Style::Underline      => 0x0200,
+        Style::BoldUnderline  => 0x0300,
+        Style::Reverse        => 0x0400,
     }
 }
 
