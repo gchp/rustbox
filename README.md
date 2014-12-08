@@ -10,6 +10,9 @@ The original implementation of this was inspired by [Aaron Pribadi](http://githu
 
 ## Usage
 
+Before you can use `rustbox` you'll need to install the termbox C library. To do this you can simply run the `install_termbox.sh` script
+provided in this repository.
+
 The best way to use Rustbox is in your Cargo config file. You are using [Cargo](http://github.com/rust-lang/cargo), right? ;)
 
 In your `Cargo.toml`:
