@@ -35,13 +35,26 @@ Then, in your  `src/example.rs`:
 ```rust
 extern crate rustbox;
 
+use std::char;
+use rustbox::{Style,Color};
+
 fn main() {
     rustbox::init();
-    rustbox::print(1, 1, rustbox::Bold, rustbox::White, rustbox::Black, "Hello, world!".to_string());
+    rustbox::print(1, 1, Style::Bold, Color::White, Color::Black, "Hello, world!".to_string());
+    rustbox::print(1, 3, Style::Bold, Color::White, Color::Black, "Press 'q' to quit.".to_string());
     rustbox::present();
 
-    std::io::timer::sleep(std::time::Duration::milliseconds(1000));
-
+    loop {
+        match rustbox::poll_event() {
+            rustbox::Event::KeyEvent(_, _, ch) => {
+                match char::from_u32(ch) {
+                    Some('q') => { break; },
+                    _ => {}
+                }
+            },
+            _ => { }
+        }
+    }
     rustbox::shutdown();
 }
 ```
