@@ -3,8 +3,8 @@ name = "test"
 version = "0.0.1"
 authors = ["gregchapple1@gmail.com"]
 
-[dependencies.rustbox]
-path = "../"
+[dependencies]
+rustbox = "0.1.0"
 
 [[bin]]
 name="test"

@@ -15,19 +15,18 @@ provided in this repository.
 
 The best way to use Rustbox is in your Cargo config file. You are using [Cargo](http://github.com/rust-lang/cargo), right? ;)
 
-In your `Cargo.toml`:
+In your `Cargo.toml` add the following:
 
 ```
-[package]
-name = "example"
-version = "0.1.0"
-authors = ["You <you@example.com>"]
+[dependencies]
+rustbox = "0.1.0"
+```
 
+You can also use the current git version by instead adding:
+
+```
 [dependencies.rustbox]
 git = "https://github.com/gchp/rustbox.git"
-
-[[bin]]
-name = "example"
 ```
 
 Then, in your  `src/example.rs`:

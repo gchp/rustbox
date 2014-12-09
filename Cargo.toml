@@ -1,7 +1,20 @@
-[project]
+[package]
 name = "rustbox"
 version = "0.1.0"
 authors = ["Greg Chapple <gregchapple1@gmail.com>"]
+description = "A rust implementation of the termbox library"
+repository = "https://github.com/gchp/rustbox"
+homepage = "https://github.com/gchp/rustbox"
+readme = "README.md"
+license = "MIT"
+keywords = [
+    "termbox",
+    "terminal",
+    "gui",
+]
+exclude = [
+    "examples/*"
+]
 
 [lib]
 name = "rustbox"
