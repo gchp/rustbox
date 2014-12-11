@@ -18,3 +18,7 @@ exclude = [
 
 [lib]
 name = "rustbox"
+
+[dependencies.termbox-sys]
+path = "termbox-sys"
+version = "*"

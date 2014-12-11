@@ -1,0 +1,3 @@
+[submodule "termbox-sys/termbox"]
+	path = termbox-sys/termbox
+	url = https://github.com/nsf/termbox

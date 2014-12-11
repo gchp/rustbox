@@ -1,0 +1,11 @@
+[package]
+
+name = "termbox-sys"
+version = "0.0.1"
+authors = [
+    "Greg Chapple <gregchapple1@gmail.com>",
+    "Tom Jakubowski <tom@crystae.net>"
+]
+
+links = "termbox"
+build = "src/build.rs"

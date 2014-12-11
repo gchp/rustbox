@@ -1,23 +1,17 @@
-#![feature(link_args)]
-
 extern crate libc;
-use libc::types::os::arch::c95::{c_int, c_uint};
+extern crate "termbox-sys" as termbox;
 
-pub struct RawEvent {
-    etype: u8,
-    emod: u8,
-    key: u16,
-    ch: u32,
-    w: i32,
-    h: i32,
-}
+use termbox::RawEvent;
+use libc::{c_int, c_uint};
 
+#[deriving(Copy)]
 pub enum Event {
     KeyEvent(u8, u16, u32),
     ResizeEvent(i32, i32),
     NoEvent
 }
 
+#[deriving(Copy)]
 pub enum Color {
     Default,
     Black,
@@ -30,37 +24,13 @@ pub enum Color {
     White
 }
 
+#[deriving(Copy)]
 pub enum Style {
     Normal,
     Bold,
     Underline,
     BoldUnderline,
     Reverse
-}
-
-mod termbox {
-    use libc::types::os::arch::c95::{c_int, c_uint};
-
-    #[link(name="termbox")]
-    extern {
-        pub fn tb_init() -> c_int;
-        pub fn tb_shutdown();
-
-        pub fn tb_width() -> c_uint;
-        pub fn tb_height() -> c_uint;
-
-        pub fn tb_clear();
-        pub fn tb_present();
-
-        pub fn tb_set_cursor(cx: c_int, cy: c_int);
-        pub fn tb_change_cell(x: c_uint, y: c_uint, ch: u32, fg: u16, bg: u16);
-
-        //pub fn tb_select_input_mode(mode: c_int) -> c_int;
-        //pub fn tb_set_clear_attributes(fg: u16, bg: u16);
-
-        pub fn tb_peek_event(ev: *const ::RawEvent, timeout: c_uint) -> c_int;
-        pub fn tb_poll_event(ev: *const ::RawEvent) -> c_int;
-    }
 }
 
 fn nil_raw_event() -> RawEvent {
