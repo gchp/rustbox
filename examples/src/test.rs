@@ -6,8 +6,8 @@ use rustbox::{Style,Color};
 
 fn main() {
     rustbox::init();
-    rustbox::print(1, 1, Style::Bold, Color::White, Color::Black, "Hello, world!".to_string());
-    rustbox::print(1, 3, Style::Bold, Color::White, Color::Black, "Press 'q' to quit.".to_string());
+    rustbox::print(1, 1, Style::Bold, Color::White, Color::Black, "Hello, world!");
+    rustbox::print(1, 3, Style::Bold, Color::White, Color::Black, "Press 'q' to quit.");
     rustbox::present();
 
     loop {
