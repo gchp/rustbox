@@ -105,17 +105,17 @@ pub fn print_char(x: uint, y: uint, sty: Style, fg: Color, bg: Color, ch: char) 
 }
 
 pub fn poll_event() -> Event {
-    unsafe {
-        let ev = nil_raw_event();
-        let rc = termbox::tb_poll_event(&ev as *const RawEvent);
-        unpack_event(rc, &ev)
-    }
+    let ev = nil_raw_event();
+    let rc = unsafe {
+        termbox::tb_poll_event(&ev as *const RawEvent)
+    };
+    unpack_event(rc, &ev)
 }
 
 pub fn peek_event(timeout: uint) -> Event {
-    unsafe {
-        let ev = nil_raw_event();
-        let rc = termbox::tb_peek_event(&ev as *const RawEvent, timeout as c_uint);
-        unpack_event(rc, &ev)
-    }
+    let ev = nil_raw_event();
+    let rc = unsafe {
+        termbox::tb_peek_event(&ev as *const RawEvent, timeout as c_uint)
+    };
+    unpack_event(rc, &ev)
 }
