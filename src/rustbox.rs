@@ -40,13 +40,9 @@ fn nil_raw_event() -> RawEvent {
 fn unpack_event(ev_type: c_int, ev: &RawEvent) -> Event {
     match ev_type {
         0 => Event::NoEvent,
-        1 => {
-            return Event::KeyEvent(ev.emod, ev.key, ev.ch);
-        },
-        2 => {
-            return Event::ResizeEvent(ev.w, ev.h);
-        },
-        _ => { panic!("Unknown event"); }
+        1 => Event::KeyEvent(ev.emod, ev.key, ev.ch),
+        2 => Event::ResizeEvent(ev.w, ev.h),
+        _ => panic!("Unknown event")
     }
 }
 
@@ -128,7 +124,7 @@ pub fn poll_event() -> Event {
     unsafe {
         let ev = nil_raw_event();
         let rc = termbox::tb_poll_event(&ev as *const RawEvent);
-        return unpack_event(rc, &ev);
+        unpack_event(rc, &ev)
     }
 }
 
@@ -136,6 +132,6 @@ pub fn peek_event(timeout: uint) -> Event {
     unsafe {
         let ev = nil_raw_event();
         let rc = termbox::tb_peek_event(&ev as *const RawEvent, timeout as c_uint);
-        return unpack_event(rc, &ev);
+        unpack_event(rc, &ev)
     }
 }
