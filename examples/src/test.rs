@@ -6,7 +6,7 @@ use std::error::Error;
 use rustbox::{Color, EventErrorKind, RustBox};
 
 fn main() {
-    let rustbox = RustBox::new().unwrap();
+    let rustbox = RustBox::init().unwrap();
     rustbox.print(1, 1, rustbox::TB_BOLD, Color::White, Color::Black, "Hello, world!".to_string());
     rustbox.print(1, 3, rustbox::TB_BOLD, Color::White, Color::Black, "Press 'q' to quit.".to_string());
     rustbox.present();

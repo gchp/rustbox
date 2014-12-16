@@ -143,7 +143,7 @@ pub struct RustBox {
 }
 
 impl RustBox {
-    pub fn new() -> Result<RustBox, InitError> {
+    pub fn init() -> Result<RustBox, InitError> {
         // Ensure that we are not already running and simultaneously set RUSTBOX_RUNNING using an
         // atomic swap.  This ensures that contending threads don't trample each other.
         if RUSTBOX_RUNNING.swap(true, atomic::SeqCst) {
