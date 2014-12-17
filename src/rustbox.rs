@@ -1,11 +1,12 @@
 extern crate libc;
 extern crate "termbox-sys" as termbox;
 
-pub use self::style::{Style, TB_BOLD, TB_UNDERLINE, TB_REVERSE};
+pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE};
 
 use std::sync::atomic::{mod, AtomicBool};
 use std::error::Error;
 use std::kinds::marker;
+use std::time::duration::Duration;
 
 use termbox::RawEvent;
 use libc::{c_int, c_uint};
@@ -46,10 +47,10 @@ mod style {
         #[repr(C)]
         flags Style: u16 {
             const TB_NORMAL_COLOR = 0x000F,
-            const TB_BOLD = 0x0100,
-            const TB_UNDERLINE = 0x0200,
-            const TB_REVERSE = 0x0400,
-            const TB_ATTRIB = TB_BOLD.bits | TB_UNDERLINE.bits | TB_REVERSE.bits,
+            const RB_BOLD = 0x0100,
+            const RB_UNDERLINE = 0x0200,
+            const RB_REVERSE = 0x0400,
+            const TB_ATTRIB = RB_BOLD.bits | RB_UNDERLINE.bits | RB_REVERSE.bits,
         }
     }
 
@@ -66,24 +67,25 @@ const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 
 // #[deriving(Copy,FromPrimitive,Show)]
 // #[repr(C,int)]
 // pub enum EventErrorKind {
-//     EOF = -1,
+//     Error = -1,
 // }
 // pub type EventError = Option<EventErrorKind>;
 #[allow(non_snake_case)]
 pub mod EventErrorKind {
     #[deriving(Copy,Show)]
-    pub struct EOF;
+    pub struct Error;
 }
 
-pub type EventError = Option<EventErrorKind::EOF>;
+pub type EventError = Option<EventErrorKind::Error>;
 
 pub type EventResult<T> = Result<T, EventError>;
 
 impl Error for EventError {
     fn description(&self) -> &str {
         match *self {
-            Some(EventErrorKind::EOF) => "End of file",
-            None => "Unknown error."
+            // TODO: Check errno here
+            Some(EventErrorKind::Error) => "Unknown error.",
+            None => "Unexpected return code."
         }
     }
 }
@@ -95,7 +97,7 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
         2 => Ok(Event::ResizeEvent(ev.w, ev.h)),
         // FIXME: Rust doesn't support this error representation
         // res => FromPrimitive::from_int(res as int),
-        -1 => Err(Some(EventErrorKind::EOF)),
+        -1 => Err(Some(EventErrorKind::Error)),
         _ => Err(None)
     }
 }
@@ -121,7 +123,7 @@ impl Error for InitError {
                 "Pipe trap error.  \
                  Termbox uses unix pipes in order to deliver a message from a signal handler to \
                  the main event reading loop.",
-            None => "Unknown error."
+            None => "Unexpected return code."
         }
     }
 }
@@ -217,11 +219,10 @@ impl RustBox {
         }
     }
 
-    /// Returns Err(()) on EOF
-    pub fn peek_event(&self, timeout: uint) -> EventResult<Event> {
+    pub fn peek_event(&self, timeout: Duration) -> EventResult<Event> {
         unsafe {
             let ev = NIL_RAW_EVENT;
-            let rc = termbox::tb_peek_event(&ev as *const RawEvent, timeout as c_uint);
+            let rc = termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_uint);
             unpack_event(rc, &ev)
         }
     }
