@@ -1,16 +1,21 @@
 extern crate rustbox;
 
 use std::char;
+use std::io::stdio;
 use std::error::Error;
 
-use rustbox::{Color, RustBox};
+use rustbox::{Color, RustBox, InitOption};
 
 fn main() {
-    let rustbox = RustBox::init().unwrap();
-    rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!".to_string());
-    rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black, "Press 'q' to quit.".to_string());
-    rustbox.present();
+    let options = [
+        if stdio::stderr_raw().isatty() { Some(InitOption::BufferStderr) } else { None },
+    ];
+    let rustbox = RustBox::init(&options).unwrap();
 
+    rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!".to_string());
+    rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black,
+                  "Press 'q' to quit.".to_string());
+    rustbox.present();
     loop {
         match rustbox.poll_event() {
             Ok(rustbox::Event::KeyEvent(_, _, ch)) => {

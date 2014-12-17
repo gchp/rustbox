@@ -1,10 +1,11 @@
 extern crate libc;
 extern crate "termbox-sys" as termbox;
 
+pub use self::running::running;
 pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE};
 
-use std::sync::atomic::{mod, AtomicBool};
 use std::error::Error;
+use std::fmt;
 use std::kinds::marker;
 use std::time::duration::Duration;
 
@@ -105,67 +106,228 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
 #[deriving(Copy,FromPrimitive,Show)]
 #[repr(C,int)]
 pub enum InitErrorKind {
-    AlreadyOpen = 0,
     UnsupportedTerminal = -1,
     FailedToOpenTty = -2,
     PipeTrapError = -3,
 }
 
-pub type InitError = Option<InitErrorKind>;
+pub enum InitError {
+    Opt(InitOption, Option<Box<Error>>),
+    AlreadyOpen,
+    TermBox(Option<InitErrorKind>),
+}
+
+impl fmt::Show for InitError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", self.description())
+    }
+}
 
 impl Error for InitError {
     fn description(&self) -> &str {
         match *self {
-            Some(InitErrorKind::AlreadyOpen) => "Termbox is already open.",
-            Some(InitErrorKind::UnsupportedTerminal) => "Unsupported terminal.",
-            Some(InitErrorKind::FailedToOpenTty) => "Failed to open TTY.",
-            Some(InitErrorKind::PipeTrapError) =>
-                "Pipe trap error.  \
-                 Termbox uses unix pipes in order to deliver a message from a signal handler to \
-                 the main event reading loop.",
-            None => "Unexpected return code."
+            InitError::Opt(InitOption::BufferStderr, _) => "Could not redirect stderr.",
+            InitError::AlreadyOpen => "RustBox is already open.",
+            InitError::TermBox(e) => e.map_or("Unexpected TermBox return code.", |e| match e {
+                InitErrorKind::UnsupportedTerminal => "Unsupported terminal.",
+                InitErrorKind::FailedToOpenTty => "Failed to open TTY.",
+                InitErrorKind::PipeTrapError => "Pipe trap error.",
+            }),
+        }
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            InitError::Opt(_, Some(ref e)) => Some(&**e),
+            _ => None
         }
     }
 }
 
-// The state of the RustBox is protected by the lock.  Yay, global state!
-static RUSTBOX_RUNNING: AtomicBool = atomic::INIT_ATOMIC_BOOL;
+mod running {
+    use std::sync::atomic::{mod, AtomicBool};
 
-/// true iff RustBox is currently running.  Beware of races here--don't rely on this for anything
-/// critical unless you happen to know that RustBox cannot change state when it is called (a good
-/// usecase would be checking to see if it's worth risking double printing backtraces to avoid
-/// having them swallowed up by RustBox).
-pub fn running() -> bool {
-    RUSTBOX_RUNNING.load(atomic::SeqCst)
-}
+    // The state of the RustBox is protected by the lock.  Yay, global state!
+    static RUSTBOX_RUNNING: AtomicBool = atomic::INIT_ATOMIC_BOOL;
 
-#[allow(missing_copy_implementations)]
-pub struct RustBox {
-    no_sync: marker::NoSync, // Termbox is not thread safe
-}
+    /// true iff RustBox is currently running.  Beware of races here--don't rely on this for anything
+    /// critical unless you happen to know that RustBox cannot change state when it is called (a good
+    /// usecase would be checking to see if it's worth risking double printing backtraces to avoid
+    /// having them swallowed up by RustBox).
+    pub fn running() -> bool {
+        RUSTBOX_RUNNING.load(atomic::SeqCst)
+    }
 
-impl RustBox {
-    pub fn init() -> Result<RustBox, InitError> {
+    // Internal RAII guard used to ensure we release the running lock whenever we acquire it.
+    #[allow(missing_copy_implementations)]
+    pub struct RunningGuard(());
+
+    pub fn run() -> Option<RunningGuard> {
         // Ensure that we are not already running and simultaneously set RUSTBOX_RUNNING using an
         // atomic swap.  This ensures that contending threads don't trample each other.
         if RUSTBOX_RUNNING.swap(true, atomic::SeqCst) {
             // The Rustbox was already running.
-            Err(Some(InitErrorKind::AlreadyOpen))
+            None
         } else {
-            // The Rustbox was not already running.
+            // The RustBox was not already running, and now we have the lock.
+            Some(RunningGuard(()))
+        }
+    }
+
+    impl Drop for RunningGuard {
+        fn drop(&mut self) {
+            // Indicate that we're free now.  We could probably get away with lower atomicity here,
+            // but there's no reason to take that chance.
+            RUSTBOX_RUNNING.store(false, atomic::SeqCst);
+        }
+    }
+}
+
+// RAII guard for input redirection
+#[cfg(unix)]
+mod redirect {
+    use std::error::Error;
+
+    use libc;
+    use std::io::{util, IoError, PipeStream};
+    use std::io::pipe::PipePair;
+    use std::os::unix::AsRawFd;
+    use super::{InitError, InitOption, RustBox};
+
+    pub struct Redirect {
+        pair: PipePair,
+        fd: PipeStream,
+    }
+
+    impl Drop for Redirect {
+        fn drop(&mut self) {
+            // We make sure that we never actually create the Redirect without also putting it in a
+            // RustBox.  This means that we know that this will always be dropped immediately after
+            // the RustBox is destroyed.  We rely on destructor order here: destructors are always
+            // executed top-down, so as long as this is included above the RunningGuard in the
+            // RustBox struct, we can be confident that it is destroyed while we're still holding
+            // onto the lock.
+
             unsafe {
-                match termbox::tb_init() {
-                    0 => Ok(RustBox { no_sync: marker::NoSync }),
-                    res => {
-                        // Remember to unset RUSTBOX_RUNNING.
-                        // Probably don't need SeqCst, but as noted elsewhere, better safe than
-                        // sorry.
-                        RUSTBOX_RUNNING.store(false, atomic::SeqCst);
-                        Err(FromPrimitive::from_int(res as int))
-                    }
-                }
+                let old_fd = self.pair.writer.as_raw_fd();
+                let new_fd = self.fd.as_raw_fd();
+                // Reopen new_fd as writer.
+                // (Note that if we fail here, we can't really do anything about it, so just ignore any
+                // errors).
+                if libc::dup2(old_fd, new_fd) != new_fd { return }
+            }
+            // Copy from reader to writer.
+            drop(util::copy(&mut self.pair.reader, &mut self.pair.writer));
+        }
+    }
+
+    fn redirect(new: PipeStream) -> Result<Redirect, Option<Box<Error>>> {
+        // Create a pipe pair.
+        let mut pair = try!(PipeStream::pair().map_err( |e| Some(box e as Box<Error>)));
+        unsafe {
+            let new_fd = new.as_raw_fd();
+            // Copy new_fd to dup_fd.
+            let dup_fd = match libc::dup(new_fd) {
+                -1 => return Err(Some(box IoError::last_error() as Box<Error>)),
+                fd => try!(PipeStream::open(fd).map_err( |e| Some(box e as Box<Error>))),
+            };
+            // Reopen new_fd as writer.
+            let old_fd = pair.writer.as_raw_fd();
+            let fd = libc::dup2(old_fd, new_fd);
+            if fd == new_fd {
+                // On success, the new file descriptor should be returned.  Replace the old one
+                // with dup_fd, since we no longer need an explicit reference to the writer.
+                pair.writer = dup_fd;
+                Ok(Redirect {
+                    pair: pair,
+                    fd: new,
+                })
+            } else {
+                Err(if fd == -1 { Some(box IoError::last_error() as Box<Error>) } else { None })
             }
         }
+    }
+
+    // The reason we take the rb reference is mostly to make sure we don't try to redirect before
+    // the TermBox is set up.  Otherwise it is too easy to leave the file handles in a bad state.
+    pub fn redirect_stderr(rb: &mut RustBox) -> Result<(), InitError> {
+        match rb.stderr {
+            Some(_) => {
+                // Can only redirect once.
+                Err(InitError::Opt(InitOption::BufferStderr, None))
+            },
+            None => {
+                rb.stderr = Some(try!(redirect(
+                            try!(PipeStream::open(libc::STDERR_FILENO)
+                                 .map_err( |e| InitError::Opt(InitOption::BufferStderr,
+                                                              Some(box e as Box<Error>)))))
+                        .map_err( |e| InitError::Opt(InitOption::BufferStderr, e))));
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+// Not sure how we'll do this on Windows, unimplemented for now.
+mod redirect {
+    pub enum Redirect { }
+
+    pub fn redirect_stderr(_: &mut super::RustBox) -> Result<(), super::InitError> {
+        Err(super::InitError::Opt(super::InitOption::BufferStderr, None))
+    }
+}
+
+#[allow(missing_copy_implementations)]
+pub struct RustBox {
+    // Termbox is not thread safe
+    no_sync: marker::NoSync,
+
+    // We only bother to redirect stderr for the moment, since it's used for panic!
+    stderr: Option<redirect::Redirect>,
+
+    // RAII lock.
+    //
+    // Note that running *MUST* be the last field in the destructor, since destructors run in
+    // top-down order.  Otherwise it will not properly protect the above fields.
+    _running: running::RunningGuard,
+}
+
+#[deriving(Copy,Show)]
+pub enum InitOption {
+    /// Use this option to automatically buffer stderr while RustBox is running.  It will be
+    /// written when RustBox exits.
+    BufferStderr,
+}
+
+impl RustBox {
+    pub fn init(opts: &[Option<InitOption>]) -> Result<RustBox, InitError> {
+        // Acquire RAII lock.  This might seem like overkill, but it is easy to forget to release
+        // it in the maze of error conditions below.
+        let running = match running::run() {
+            Some(r) => r,
+            None => return Err(InitError::AlreadyOpen)
+        };
+        // Create the RustBox.
+        let mut rb = unsafe {
+            match termbox::tb_init() {
+                0 => RustBox {
+                    no_sync: marker::NoSync,
+                    stderr: None,
+                    _running: running,
+                },
+                res => {
+                    return Err(InitError::TermBox(FromPrimitive::from_int(res as int)))
+                }
+            }
+        };
+        // Time to check our options.
+        for opt in opts.iter().filter_map(|&opt| opt) {
+            match opt {
+                InitOption::BufferStderr => try!(redirect::redirect_stderr(&mut rb)),
+            }
+        }
+        Ok(rb)
     }
 
     pub fn width(&self) -> uint {
@@ -194,7 +356,7 @@ impl RustBox {
     }
 
     pub fn print(&self, x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: String) {
-        let fg = Style::from_color(fg) | (sty & self::style::TB_ATTRIB);
+        let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         for (i, ch) in s.as_slice().chars().enumerate() {
             unsafe {
@@ -204,7 +366,7 @@ impl RustBox {
     }
 
     pub fn print_char(&self, x: uint, y: uint, sty: Style, fg: Color, bg: Color, ch: char) {
-        let fg = Style::from_color(fg) | (sty & self::style::TB_ATTRIB);
+        let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         unsafe {
             self.change_cell(x, y, ch as u32, fg.bits(), bg.bits());
@@ -236,8 +398,5 @@ impl Drop for RustBox {
         unsafe {
             termbox::tb_shutdown();
         }
-        // Indicate that we're free now.  We could probably get away with lower atomicity here,
-        // but there's no reason to take that chance.
-        RUSTBOX_RUNNING.store(false, atomic::SeqCst);
     }
 }
