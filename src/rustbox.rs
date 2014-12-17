@@ -2,7 +2,7 @@ extern crate libc;
 extern crate "termbox-sys" as termbox;
 
 pub use self::running::running;
-pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE};
+pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
 use std::error::Error;
 use std::fmt;
@@ -22,26 +22,16 @@ pub enum Event {
 #[deriving(Copy)]
 #[repr(C,u16)]
 pub enum Color {
-    Default = TB_DEFAULT as int,
-    Black = TB_BLACK as int,
-    Red = TB_RED as int,
-    Green = TB_GREEN as int,
-    Yellow = TB_YELLOW as int,
-    Blue = TB_BLUE as int,
-    Magenta = TB_MAGENTA as int,
-    Cyan = TB_CYAN as int,
-    White = TB_WHITE as int,
+    Default =  0x00,
+    Black =    0x01,
+    Red =      0x02,
+    Green =    0x03,
+    Yellow =   0x04,
+    Blue =     0x05,
+    Magenta =  0x06,
+    Cyan =     0x07,
+    White =    0x08,
 }
-
-const TB_DEFAULT: u16 = 0x00;
-const TB_BLACK: u16 = 0x01;
-const TB_RED: u16 = 0x02;
-const TB_GREEN: u16 = 0x03;
-const TB_YELLOW: u16 = 0x04;
-const TB_BLUE: u16 = 0x05;
-const TB_MAGENTA: u16 = 0x06;
-const TB_CYAN: u16 = 0x07;
-const TB_WHITE: u16 = 0x08;
 
 mod style {
     bitflags! {
@@ -51,6 +41,7 @@ mod style {
             const RB_BOLD = 0x0100,
             const RB_UNDERLINE = 0x0200,
             const RB_REVERSE = 0x0400,
+            const RB_NORMAL = 0x0000,
             const TB_ATTRIB = RB_BOLD.bits | RB_UNDERLINE.bits | RB_REVERSE.bits,
         }
     }
@@ -355,10 +346,10 @@ impl RustBox {
         termbox::tb_change_cell(x as c_uint, y as c_uint, ch, fg, bg)
     }
 
-    pub fn print(&self, x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: String) {
+    pub fn print(&self, x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: &str) {
         let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
-        for (i, ch) in s.as_slice().chars().enumerate() {
+        for (i, ch) in s.chars().enumerate() {
             unsafe {
                 self.change_cell(x+i, y, ch as u32, fg.bits(), bg.bits());
             }
@@ -374,19 +365,19 @@ impl RustBox {
     }
 
     pub fn poll_event(&self) -> EventResult<Event> {
-        unsafe {
-            let ev = NIL_RAW_EVENT;
-            let rc = termbox::tb_poll_event(&ev as *const RawEvent);
-            unpack_event(rc, &ev)
-        }
+        let ev = NIL_RAW_EVENT;
+        let rc = unsafe {
+            termbox::tb_poll_event(&ev as *const RawEvent)
+        };
+        unpack_event(rc, &ev)
     }
 
     pub fn peek_event(&self, timeout: Duration) -> EventResult<Event> {
-        unsafe {
-            let ev = NIL_RAW_EVENT;
-            let rc = termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_uint);
-            unpack_event(rc, &ev)
-        }
+        let ev = NIL_RAW_EVENT;
+        let rc = unsafe {
+            termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_uint)
+        };
+        unpack_event(rc, &ev)
     }
 }
 

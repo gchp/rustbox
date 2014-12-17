@@ -12,9 +12,9 @@ fn main() {
     ];
     let rustbox = RustBox::init(&options).unwrap();
 
-    rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!".to_string());
+    rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!");
     rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black,
-                  "Press 'q' to quit.".to_string());
+                  "Press 'q' to quit.");
     rustbox.present();
     loop {
         match rustbox.poll_event() {
