@@ -19,7 +19,7 @@ pub enum Event {
     NoEvent
 }
 
-#[deriving(Copy)]
+#[deriving(Copy, PartialEq)]
 #[repr(C,u16)]
 pub enum Color {
     Default =  0x00,
