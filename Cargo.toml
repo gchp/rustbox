@@ -20,5 +20,4 @@ exclude = [
 name = "rustbox"
 
 [dependencies.termbox-sys]
-path = "termbox-sys"
-version = "*"
+git = "https://github.com/gchp/termbox-sys"
