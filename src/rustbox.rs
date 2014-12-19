@@ -227,8 +227,17 @@ mod redirect {
                 -1 => return Err(Some(box IoError::last_error() as Box<Error>)),
                 fd => try!(PipeStream::open(fd).map_err( |e| Some(box e as Box<Error>))),
             };
-            // Reopen new_fd as writer.
+            // Make the writer nonblocking.  This means that even if the stderr pipe fills up,
+            // exceptions from stack traces will not block the program.  Unfortunately, if this
+            // does happen stderr outputwill be lost until RustBox exits.
             let old_fd = pair.writer.as_raw_fd();
+            let res = libc::fcntl(old_fd, libc::F_SETFL, libc::O_NONBLOCK);
+            if res != 0 {
+                return Err(if res == -1 {
+                    Some(box IoError::last_error() as Box<Error>)
+                } else { None }) // This should really never happen, but no reason to unwind here.
+            }
+            // Reopen new_fd as writer.
             let fd = libc::dup2(old_fd, new_fd);
             if fd == new_fd {
                 // On success, the new file descriptor should be returned.  Replace the old one
@@ -300,6 +309,11 @@ pub struct RustBox {
 pub enum InitOption {
     /// Use this option to automatically buffer stderr while RustBox is running.  It will be
     /// written when RustBox exits.
+    ///
+    /// This option uses a nonblocking OS pipe to buffer stderr output.  This means that if the
+    /// pipe fills up, subsequent writes will fail until RustBox exits.  If this is a concern for
+    /// your program, don't use RustBox's default pipe-based redirection; instead, redirect stderr
+    /// to a log file or another process that is capable of handling it better.
     BufferStderr,
 }
 
