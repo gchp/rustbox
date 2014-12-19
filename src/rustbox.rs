@@ -183,7 +183,8 @@ mod redirect {
     use std::io::{util, IoError, PipeStream};
     use std::io::pipe::PipePair;
     use std::os::unix::AsRawFd;
-    use super::{InitError, InitOption, RustBox};
+    use super::{InitError, InitOption};
+    use super::running::RunningGuard;
 
     pub struct Redirect {
         pair: PipePair,
@@ -192,13 +193,14 @@ mod redirect {
 
     impl Drop for Redirect {
         fn drop(&mut self) {
-            // We make sure that we never actually create the Redirect without also putting it in a
-            // RustBox.  This means that we know that this will always be dropped immediately after
-            // the RustBox is destroyed.  We rely on destructor order here: destructors are always
-            // executed top-down, so as long as this is included above the RunningGuard in the
-            // RustBox struct, we can be confident that it is destroyed while we're still holding
-            // onto the lock.
-
+            // We make sure that we never actually create the Redirect without also taking a
+            // RunningGuard.  This means that we know that this will always be dropped immediately
+            // before the RunningGuard is destroyed, and *after* a RustBox containing one is
+            // destroyed.
+            //
+            // We rely on destructor order here: destructors are always executed top-down,  so as
+            // long as this is included above the RunningGuard in the RustBox struct, we can be
+            // confident that it is destroyed while we're still holding onto the lock.
             unsafe {
                 let old_fd = self.pair.writer.as_raw_fd();
                 let new_fd = self.fd.as_raw_fd();
@@ -212,7 +214,10 @@ mod redirect {
         }
     }
 
-    fn redirect(new: PipeStream) -> Result<Redirect, Option<Box<Error>>> {
+    // The reason we take the RunningGuard is to make sure we don't try to redirect before the
+    // TermBox is set up.  Otherwise it is possible to race with other threads trying to set up the
+    // RustBox.
+    fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, Option<Box<Error>>> {
         // Create a pipe pair.
         let mut pair = try!(PipeStream::pair().map_err( |e| Some(box e as Box<Error>)));
         unsafe {
@@ -228,6 +233,12 @@ mod redirect {
             if fd == new_fd {
                 // On success, the new file descriptor should be returned.  Replace the old one
                 // with dup_fd, since we no longer need an explicit reference to the writer.
+                // Note that it is *possible* that some other thread tried to take over stderr
+                // between when we did and now, causing a race here.  RustBox won't do it, though.
+                // And it's honestly not clear how to guarantee correct behavior there anyway,
+                // since if the change had come a fraction of a second later we still probably
+                // wouldn't want to overwite it.  In general this is a good argument for why the
+                // redirect behavior is optional.
                 pair.writer = dup_fd;
                 Ok(Redirect {
                     pair: pair,
@@ -239,19 +250,19 @@ mod redirect {
         }
     }
 
-    // The reason we take the rb reference is mostly to make sure we don't try to redirect before
-    // the TermBox is set up.  Otherwise it is too easy to leave the file handles in a bad state.
-    pub fn redirect_stderr(rb: &mut RustBox) -> Result<(), InitError> {
-        match rb.stderr {
+    pub fn redirect_stderr(stderr: &mut Option<Redirect>,
+                           rg: &RunningGuard) -> Result<(), InitError> {
+        match *stderr {
             Some(_) => {
                 // Can only redirect once.
                 Err(InitError::Opt(InitOption::BufferStderr, None))
             },
             None => {
-                rb.stderr = Some(try!(redirect(
+                *stderr = Some(try!(redirect(
                             try!(PipeStream::open(libc::STDERR_FILENO)
-                                 .map_err( |e| InitError::Opt(InitOption::BufferStderr,
-                                                              Some(box e as Box<Error>)))))
+                            .map_err( |e| InitError::Opt(InitOption::BufferStderr,
+                                                              Some(box e as Box<Error>)))),
+                            rg)
                         .map_err( |e| InitError::Opt(InitOption::BufferStderr, e))));
                 Ok(())
             }
@@ -264,7 +275,8 @@ mod redirect {
 mod redirect {
     pub enum Redirect { }
 
-    pub fn redirect_stderr(_: &mut super::RustBox) -> Result<(), super::InitError> {
+    pub fn redirect_stderr(_: &mut Option<Redirect>,
+                           _: &super::RunningGuard) -> Result<(), super::InitError> {
         Err(super::InitError::Opt(super::InitOption::BufferStderr, None))
     }
 }
@@ -275,7 +287,7 @@ pub struct RustBox {
     no_sync: marker::NoSync,
 
     // We only bother to redirect stderr for the moment, since it's used for panic!
-    stderr: Option<redirect::Redirect>,
+    _stderr: Option<redirect::Redirect>,
 
     // RAII lock.
     //
@@ -299,26 +311,26 @@ impl RustBox {
             Some(r) => r,
             None => return Err(InitError::AlreadyOpen)
         };
+        // Time to check our options.
+        let mut stderr = None;
+        for opt in opts.iter().filter_map(|&opt| opt) {
+            match opt {
+                InitOption::BufferStderr => try!(redirect::redirect_stderr(&mut stderr, &running)),
+            }
+        }
         // Create the RustBox.
-        let mut rb = unsafe {
+        Ok(unsafe {
             match termbox::tb_init() {
                 0 => RustBox {
                     no_sync: marker::NoSync,
-                    stderr: None,
+                    _stderr: stderr,
                     _running: running,
                 },
                 res => {
                     return Err(InitError::TermBox(FromPrimitive::from_int(res as int)))
                 }
             }
-        };
-        // Time to check our options.
-        for opt in opts.iter().filter_map(|&opt| opt) {
-            match opt {
-                InitOption::BufferStderr => try!(redirect::redirect_stderr(&mut rb)),
-            }
-        }
-        Ok(rb)
+        })
     }
 
     pub fn width(&self) -> uint {
