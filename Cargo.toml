@@ -1,6 +1,6 @@
 [package]
 name = "rustbox"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Greg Chapple <gregchapple1@gmail.com>"]
 description = "A rust implementation of the termbox library"
 repository = "https://github.com/gchp/rustbox"
@@ -20,4 +20,4 @@ exclude = [
 name = "rustbox"
 
 [dependencies.termbox-sys]
-git = "https://github.com/gchp/termbox-sys"
+version = "0.1.0"
