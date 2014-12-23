@@ -4,7 +4,7 @@ version = "0.0.1"
 authors = ["gregchapple1@gmail.com"]
 
 [dependencies]
-rustbox = "0.1.0"
+rustbox = "0.2.1"
 
 [[bin]]
 name="test"
