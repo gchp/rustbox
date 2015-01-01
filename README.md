@@ -14,14 +14,14 @@ The best way to use Rustbox is in your Cargo config file. You are using [Cargo](
 
 In your `Cargo.toml` add the following:
 
-```
+```toml
 [dependencies]
 rustbox = "0.2.1"
 ```
 
 You can also use the current git version by instead adding:
 
-```
+```toml
 [dependencies.rustbox]
 git = "https://github.com/gchp/rustbox.git"
 ```
