@@ -8,18 +8,19 @@ use std::error::Error;
 use std::fmt;
 use std::kinds::marker;
 use std::time::duration::Duration;
+use std::num::FromPrimitive;
 
 use termbox::RawEvent;
 use libc::{c_int, c_uint};
 
-#[deriving(Copy)]
+#[derive(Copy)]
 pub enum Event {
     KeyEvent(u8, u16, u32),
     ResizeEvent(i32, i32),
     NoEvent
 }
 
-#[deriving(Copy, PartialEq)]
+#[derive(Copy, PartialEq)]
 #[repr(C,u16)]
 pub enum Color {
     Default =  0x00,
@@ -56,7 +57,7 @@ mod style {
 const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 0, h: 0 };
 
 // FIXME: Rust doesn't support this enum representation.
-// #[deriving(Copy,FromPrimitive,Show)]
+// #[derive(Copy,FromPrimitive,Show)]
 // #[repr(C,int)]
 // pub enum EventErrorKind {
 //     Error = -1,
@@ -64,7 +65,7 @@ const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 
 // pub type EventError = Option<EventErrorKind>;
 #[allow(non_snake_case)]
 pub mod EventErrorKind {
-    #[deriving(Copy,Show)]
+    #[derive(Copy,Show)]
     pub struct Error;
 }
 
@@ -94,7 +95,7 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
     }
 }
 
-#[deriving(Copy,FromPrimitive,Show)]
+#[derive(Copy,FromPrimitive,Show)]
 #[repr(C,int)]
 pub enum InitErrorKind {
     UnsupportedTerminal = -1,
@@ -136,10 +137,10 @@ impl Error for InitError {
 }
 
 mod running {
-    use std::sync::atomic::{mod, AtomicBool};
+    use std::sync::atomic::{self, AtomicBool};
 
     // The state of the RustBox is protected by the lock.  Yay, global state!
-    static RUSTBOX_RUNNING: AtomicBool = atomic::INIT_ATOMIC_BOOL;
+    static RUSTBOX_RUNNING: AtomicBool = atomic::ATOMIC_BOOL_INIT;
 
     /// true iff RustBox is currently running.  Beware of races here--don't rely on this for anything
     /// critical unless you happen to know that RustBox cannot change state when it is called (a good
@@ -305,7 +306,7 @@ pub struct RustBox {
     _running: running::RunningGuard,
 }
 
-#[deriving(Copy,Show)]
+#[derive(Copy,Show)]
 pub enum InitOption {
     /// Use this option to automatically buffer stderr while RustBox is running.  It will be
     /// written when RustBox exits.
