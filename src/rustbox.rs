@@ -147,7 +147,7 @@ mod running {
     /// usecase would be checking to see if it's worth risking double printing backtraces to avoid
     /// having them swallowed up by RustBox).
     pub fn running() -> bool {
-        RUSTBOX_RUNNING.load(atomic::SeqCst)
+        RUSTBOX_RUNNING.load(atomic::Ordering::SeqCst)
     }
 
     // Internal RAII guard used to ensure we release the running lock whenever we acquire it.
@@ -157,7 +157,7 @@ mod running {
     pub fn run() -> Option<RunningGuard> {
         // Ensure that we are not already running and simultaneously set RUSTBOX_RUNNING using an
         // atomic swap.  This ensures that contending threads don't trample each other.
-        if RUSTBOX_RUNNING.swap(true, atomic::SeqCst) {
+        if RUSTBOX_RUNNING.swap(true, atomic::Ordering::SeqCst) {
             // The Rustbox was already running.
             None
         } else {
@@ -170,7 +170,7 @@ mod running {
         fn drop(&mut self) {
             // Indicate that we're free now.  We could probably get away with lower atomicity here,
             // but there's no reason to take that chance.
-            RUSTBOX_RUNNING.store(false, atomic::SeqCst);
+            RUSTBOX_RUNNING.store(false, atomic::Ordering::SeqCst);
         }
     }
 }
