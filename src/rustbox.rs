@@ -1,3 +1,5 @@
+#![allow(unstable)]
+
 extern crate libc;
 extern crate "termbox-sys" as termbox;
 
@@ -6,7 +8,7 @@ pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
 use std::error::Error;
 use std::fmt;
-use std::kinds::marker;
+use std::marker;
 use std::time::duration::Duration;
 use std::num::FromPrimitive;
 
@@ -89,14 +91,14 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
         1 => Ok(Event::KeyEvent(ev.emod, ev.key, ev.ch)),
         2 => Ok(Event::ResizeEvent(ev.w, ev.h)),
         // FIXME: Rust doesn't support this error representation
-        // res => FromPrimitive::from_int(res as int),
+        // res => FromPrimitive::from_int(res as isize),
         -1 => Err(Some(EventErrorKind::Error)),
         _ => Err(None)
     }
 }
 
 #[derive(Copy,FromPrimitive,Show)]
-#[repr(C,int)]
+#[repr(C,isize)]
 pub enum InitErrorKind {
     UnsupportedTerminal = -1,
     FailedToOpenTty = -2,
@@ -220,13 +222,13 @@ mod redirect {
     // RustBox.
     fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, Option<Box<Error>>> {
         // Create a pipe pair.
-        let mut pair = try!(PipeStream::pair().map_err( |e| Some(box e as Box<Error>)));
+        let mut pair = try!(PipeStream::pair().map_err( |e| Some(Box::new(e) as Box<Error>)));
         unsafe {
             let new_fd = new.as_raw_fd();
             // Copy new_fd to dup_fd.
             let dup_fd = match libc::dup(new_fd) {
-                -1 => return Err(Some(box IoError::last_error() as Box<Error>)),
-                fd => try!(PipeStream::open(fd).map_err( |e| Some(box e as Box<Error>))),
+                -1 => return Err(Some(Box::new(IoError::last_error()) as Box<Error>)),
+                fd => try!(PipeStream::open(fd).map_err( |e| Some(Box::new(e) as Box<Error>))),
             };
             // Make the writer nonblocking.  This means that even if the stderr pipe fills up,
             // exceptions from stack traces will not block the program.  Unfortunately, if this
@@ -235,7 +237,7 @@ mod redirect {
             let res = libc::fcntl(old_fd, libc::F_SETFL, libc::O_NONBLOCK);
             if res != 0 {
                 return Err(if res == -1 {
-                    Some(box IoError::last_error() as Box<Error>)
+                    Some(Box::new(IoError::last_error()) as Box<Error>)
                 } else { None }) // This should really never happen, but no reason to unwind here.
             }
             // Reopen new_fd as writer.
@@ -255,7 +257,7 @@ mod redirect {
                     fd: new,
                 })
             } else {
-                Err(if fd == -1 { Some(box IoError::last_error() as Box<Error>) } else { None })
+                Err(if fd == -1 { Some(Box::new(IoError::last_error()) as Box<Error>) } else { None })
             }
         }
     }
@@ -271,7 +273,7 @@ mod redirect {
                 *stderr = Some(try!(redirect(
                             try!(PipeStream::open(libc::STDERR_FILENO)
                             .map_err( |e| InitError::Opt(InitOption::BufferStderr,
-                                                              Some(box e as Box<Error>)))),
+                                                         Some(Box::new(e) as Box<Error>)) )),
                             rg)
                         .map_err( |e| InitError::Opt(InitOption::BufferStderr, e))));
                 Ok(())
@@ -342,18 +344,18 @@ impl RustBox {
                     _running: running,
                 },
                 res => {
-                    return Err(InitError::TermBox(FromPrimitive::from_int(res as int)))
+                    return Err(InitError::TermBox(FromPrimitive::from_int(res as isize)))
                 }
             }
         })
     }
 
-    pub fn width(&self) -> uint {
-        unsafe { termbox::tb_width() as uint }
+    pub fn width(&self) -> usize {
+        unsafe { termbox::tb_width() as usize }
     }
 
-    pub fn height(&self) -> uint {
-        unsafe { termbox::tb_height() as uint }
+    pub fn height(&self) -> usize {
+        unsafe { termbox::tb_height() as usize }
     }
 
     pub fn clear(&self) {
@@ -364,16 +366,16 @@ impl RustBox {
         unsafe { termbox::tb_present() }
     }
 
-    pub fn set_cursor(&self, x: int, y: int) {
+    pub fn set_cursor(&self, x: isize, y: isize) {
         unsafe { termbox::tb_set_cursor(x as c_int, y as c_int) }
     }
 
     // Unsafe because u8 is not guaranteed to be a UTF-8 character
-    pub unsafe fn change_cell(&self, x: uint, y: uint, ch: u32, fg: u16, bg: u16) {
+    pub unsafe fn change_cell(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
         termbox::tb_change_cell(x as c_uint, y as c_uint, ch, fg, bg)
     }
 
-    pub fn print(&self, x: uint, y: uint, sty: Style, fg: Color, bg: Color, s: &str) {
+    pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
         let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         for (i, ch) in s.chars().enumerate() {
@@ -383,7 +385,7 @@ impl RustBox {
         }
     }
 
-    pub fn print_char(&self, x: uint, y: uint, sty: Style, fg: Color, bg: Color, ch: char) {
+    pub fn print_char(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, ch: char) {
         let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         unsafe {
