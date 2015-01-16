@@ -22,10 +22,15 @@ pub enum Event {
     NoEvent
 }
 
-#[derive(Copy)]
+#[derive(Copy, Show)]
 pub enum InputMode {
     Current = 0x00,
+
+    /// When ESC sequence is in the buffer and it doesn't match any known
+    /// ESC sequence => ESC means TB_KEY_ESC
     Esc     = 0x01,
+    /// When ESC sequence is in the buffer and it doesn't match any known
+    /// sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
     Alt     = 0x02,
 }
 
@@ -128,6 +133,7 @@ impl Error for InitError {
     fn description(&self) -> &str {
         match *self {
             InitError::Opt(InitOption::BufferStderr, _) => "Could not redirect stderr.",
+            InitError::Opt(InitOption::InputMode(_), _) => "Could not set input mode.",
             InitError::AlreadyOpen => "RustBox is already open.",
             InitError::TermBox(e) => e.map_or("Unexpected TermBox return code.", |e| match e {
                 InitErrorKind::UnsupportedTerminal => "Unsupported terminal.",
@@ -325,6 +331,11 @@ pub enum InitOption {
     /// your program, don't use RustBox's default pipe-based redirection; instead, redirect stderr
     /// to a log file or another process that is capable of handling it better.
     BufferStderr,
+
+    /// Use this option to initialize with a specific input mode
+    ///
+    /// See InputMode enum for details on the variants.
+    InputMode(InputMode),
 }
 
 impl RustBox {
@@ -340,6 +351,7 @@ impl RustBox {
         for opt in opts.iter().filter_map(|&opt| opt) {
             match opt {
                 InitOption::BufferStderr => try!(redirect::redirect_stderr(&mut stderr, &running)),
+                InitOption::InputMode(mode) => unsafe { termbox::tb_select_input_mode(mode as c_int); },
             }
         }
         // Create the RustBox.
