@@ -16,7 +16,7 @@ In your `Cargo.toml` add the following:
 
 ```toml
 [dependencies]
-rustbox = "0.2.5"
+rustbox = "0.2.6"
 ```
 
 You can also use the current git version by instead adding:
