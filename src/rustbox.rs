@@ -22,6 +22,13 @@ pub enum Event {
     NoEvent
 }
 
+#[derive(Copy)]
+pub enum InputMode {
+    Current = 0x00,
+    Esc     = 0x01,
+    Alt     = 0x02,
+}
+
 #[derive(Copy, PartialEq)]
 #[repr(C,u16)]
 pub enum Color {
@@ -407,6 +414,12 @@ impl RustBox {
             termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_uint)
         };
         unpack_event(rc, &ev)
+    }
+
+    pub fn set_input_mode(&self, mode: InputMode) {
+        unsafe {
+            termbox::tb_select_input_mode(mode as c_int);
+        }
     }
 }
 
