@@ -1,3 +1,4 @@
+#![feature(optin_builtin_traits)]
 #![allow(unstable)]
 
 extern crate libc;
@@ -8,7 +9,6 @@ pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
 use std::error::Error;
 use std::fmt;
-use std::marker;
 use std::time::duration::Duration;
 use std::num::FromPrimitive;
 
@@ -308,9 +308,6 @@ mod redirect {
 
 #[allow(missing_copy_implementations)]
 pub struct RustBox {
-    // Termbox is not thread safe
-    no_sync: marker::NoSync,
-
     // We only bother to redirect stderr for the moment, since it's used for panic!
     _stderr: Option<redirect::Redirect>,
 
@@ -320,6 +317,9 @@ pub struct RustBox {
     // top-down order.  Otherwise it will not properly protect the above fields.
     _running: running::RunningGuard,
 }
+
+// Termbox is not thread safe
+impl !Send for RustBox {}
 
 #[derive(Copy,Show)]
 pub enum InitOption {
@@ -358,7 +358,6 @@ impl RustBox {
         Ok(unsafe {
             match termbox::tb_init() {
                 0 => RustBox {
-                    no_sync: marker::NoSync,
                     _stderr: stderr,
                     _running: running,
                 },
