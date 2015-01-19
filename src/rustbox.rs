@@ -3,6 +3,7 @@
 
 extern crate libc;
 extern crate "termbox-sys" as termbox;
+#[macro_use] extern crate bitflags;
 
 pub use self::running::running;
 pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
