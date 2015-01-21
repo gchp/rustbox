@@ -119,7 +119,7 @@ pub enum InitErrorKind {
 }
 
 pub enum InitError {
-    Opt(InitOption, Option<Box<Error>>),
+    Opt(InitOption, Option<Box<Error + 'static>>),
     AlreadyOpen,
     TermBox(Option<InitErrorKind>),
 }
@@ -234,7 +234,7 @@ mod redirect {
     // The reason we take the RunningGuard is to make sure we don't try to redirect before the
     // TermBox is set up.  Otherwise it is possible to race with other threads trying to set up the
     // RustBox.
-    fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, Option<Box<Error>>> {
+    fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, Option<Box<Error + 'static>>> {
         // Create a pipe pair.
         let mut pair = try!(PipeStream::pair().map_err( |e| Some(Box::new(e) as Box<Error>)));
         unsafe {
