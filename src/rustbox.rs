@@ -98,6 +98,12 @@ impl Error for EventError {
     }
 }
 
+impl fmt::Display for EventError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", *self)
+    }
+}
+
 fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
     match ev_type {
         0 => Ok(Event::NoEvent),
@@ -124,7 +130,7 @@ pub enum InitError {
     TermBox(Option<InitErrorKind>),
 }
 
-impl fmt::Show for InitError {
+impl fmt::Display for InitError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}", self.description())
     }
