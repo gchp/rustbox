@@ -203,8 +203,8 @@ mod redirect {
     use std::error::Error;
 
     use libc;
-    use std::io::{util, IoError, PipeStream};
-    use std::io::pipe::PipePair;
+    use std::old_io::{util, IoError, PipeStream};
+    use std::old_io::pipe::PipePair;
     use std::os::unix::AsRawFd;
     use super::{InitError, InitOption};
     use super::running::RunningGuard;
