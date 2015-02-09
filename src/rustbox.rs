@@ -1,5 +1,9 @@
+#![feature(hash)]
+#![feature(io)]
+#![feature(libc)]
+#![feature(std_misc)]
+#![feature(core)]
 #![feature(optin_builtin_traits)]
-#![allow(unstable)]
 
 extern crate libc;
 extern crate "termbox-sys" as termbox;
@@ -23,7 +27,7 @@ pub enum Event {
     NoEvent
 }
 
-#[derive(Copy, Show)]
+#[derive(Copy, Debug)]
 pub enum InputMode {
     Current = 0x00,
 
@@ -72,7 +76,7 @@ mod style {
 const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 0, h: 0 };
 
 // FIXME: Rust doesn't support this enum representation.
-// #[derive(Copy,FromPrimitive,Show)]
+// #[derive(Copy,FromPrimitive,Debug)]
 // #[repr(C,int)]
 // pub enum EventErrorKind {
 //     Error = -1,
@@ -80,7 +84,7 @@ const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 
 // pub type EventError = Option<EventErrorKind>;
 #[allow(non_snake_case)]
 pub mod EventErrorKind {
-    #[derive(Copy,Show)]
+    #[derive(Copy,Debug)]
     pub struct Error;
 }
 
@@ -116,7 +120,7 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
     }
 }
 
-#[derive(Copy,FromPrimitive,Show)]
+#[derive(Copy,FromPrimitive,Debug)]
 #[repr(C,isize)]
 pub enum InitErrorKind {
     UnsupportedTerminal = -1,
@@ -328,7 +332,7 @@ pub struct RustBox {
 // Termbox is not thread safe
 impl !Send for RustBox {}
 
-#[derive(Copy,Show)]
+#[derive(Copy,Debug)]
 pub enum InitOption {
     /// Use this option to automatically buffer stderr while RustBox is running.  It will be
     /// written when RustBox exits.
