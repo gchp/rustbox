@@ -8,9 +8,8 @@ The original implementation of this was inspired by [Aaron Pribadi](http://githu
 
 **NOTE** This is under development, and the APIs may change as I figure out more how Rust works and as the language itself changes
 
-## Usage
 
-The best way to use Rustbox is in your Cargo config file. You are using [Cargo](http://github.com/rust-lang/cargo), right? ;)
+## Usage
 
 In your `Cargo.toml` add the following:
 
@@ -26,13 +25,15 @@ You can also use the current git version by instead adding:
 git = "https://github.com/gchp/rustbox.git"
 ```
 
-Then, in your  `src/example.rs`:
+Then, in your `src/example.rs`:
 
 ```rust
+#![feature(io)]
+
 extern crate rustbox;
 
 use std::char;
-use std::io::stdio;
+use std::old_io::stdio;
 use std::error::Error;
 
 use rustbox::{Color, RustBox, InitOption};
@@ -41,7 +42,10 @@ fn main() {
     let options = [
         if stdio::stderr_raw().isatty() { Some(InitOption::BufferStderr) } else { None },
     ];
-    let rustbox = RustBox::init(&options).unwrap();
+    let rustbox = match RustBox::init(&options) {
+        Result::Ok(v) => v,
+        Result::Err(e) => panic!("{}", e),
+    };
 
     rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!");
     rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black,
@@ -61,3 +65,5 @@ fn main() {
     }
 }
 ```
+
+**NOTE:** this example can also be run with `cargo run --example hello-world`.
