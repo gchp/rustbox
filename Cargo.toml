@@ -1,6 +1,6 @@
 [package]
 name = "rustbox"
-version = "0.2.13"
+version = "0.2.14"
 authors = ["Greg Chapple <gregchapple1@gmail.com>"]
 description = "A rust implementation of the termbox library"
 repository = "https://github.com/gchp/rustbox"
@@ -21,4 +21,4 @@ name = "rustbox"
 
 [dependencies]
 bitflags = "0.1.0"
-termbox-sys = "0.1.6"
+termbox-sys = "0.1.7"
