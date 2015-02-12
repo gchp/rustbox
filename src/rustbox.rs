@@ -359,24 +359,27 @@ impl RustBox {
         };
         // Time to check our options.
         let mut stderr = None;
+        let mut input_mode = None;
         for opt in opts.iter().filter_map(|&opt| opt) {
             match opt {
                 InitOption::BufferStderr => try!(redirect::redirect_stderr(&mut stderr, &running)),
-                InitOption::InputMode(mode) => unsafe { termbox::tb_select_input_mode(mode as c_int); },
+                InitOption::InputMode(mode) => input_mode = Some(mode),
             }
         }
         // Create the RustBox.
-        Ok(unsafe {
-            match termbox::tb_init() {
-                0 => RustBox {
-                    _stderr: stderr,
-                    _running: running,
-                },
-                res => {
-                    return Err(InitError::TermBox(FromPrimitive::from_int(res as isize)))
-                }
+        let rb = unsafe { match termbox::tb_init() {
+            0 => RustBox {
+                _stderr: stderr,
+                _running: running,
+            },
+            res => {
+                return Err(InitError::TermBox(FromPrimitive::from_int(res as isize)))
             }
-        })
+        }};
+        if let Some(mode) = input_mode {
+            rb.set_input_mode(mode);
+        }
+        Ok(rb)
     }
 
     pub fn width(&self) -> usize {
