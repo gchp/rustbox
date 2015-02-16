@@ -1,18 +1,20 @@
 #![feature(io)]
+#![feature(core)]
 
 extern crate rustbox;
 
 use std::char;
 use std::old_io::stdio;
 use std::error::Error;
+use std::default::Default;
 
-use rustbox::{Color, RustBox, InitOption};
+use rustbox::{Color, RustBox, InitOptions};
 
 fn main() {
-    let options = [
-        if stdio::stderr_raw().isatty() { Some(InitOption::BufferStderr) } else { None },
-    ];
-    let rustbox = match RustBox::init(&options) {
+    let rustbox = match RustBox::init(InitOptions {
+        buffer_stderr: stdio::stderr_raw().isatty(),
+        ..Default::default()
+    }) {
         Result::Ok(v) => v,
         Result::Err(e) => panic!("{}", e),
     };

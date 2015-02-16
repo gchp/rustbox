@@ -16,6 +16,8 @@ use std::error::Error;
 use std::fmt;
 use std::time::duration::Duration;
 use std::num::FromPrimitive;
+use std::old_io::IoError;
+use std::default::Default;
 
 use termbox::RawEvent;
 use libc::{c_int, c_uint};
@@ -129,7 +131,7 @@ pub enum InitErrorKind {
 }
 
 pub enum InitError {
-    Opt(InitOption, Option<Box<Error + 'static>>),
+    BufferStderrFailed(IoError),
     AlreadyOpen,
     TermBox(Option<InitErrorKind>),
 }
@@ -143,8 +145,7 @@ impl fmt::Display for InitError {
 impl Error for InitError {
     fn description(&self) -> &str {
         match *self {
-            InitError::Opt(InitOption::BufferStderr, _) => "Could not redirect stderr.",
-            InitError::Opt(InitOption::InputMode(_), _) => "Could not set input mode.",
+            InitError::BufferStderrFailed(_) => "Could not redirect stderr.",
             InitError::AlreadyOpen => "RustBox is already open.",
             InitError::TermBox(e) => e.map_or("Unexpected TermBox return code.", |e| match e {
                 InitErrorKind::UnsupportedTerminal => "Unsupported terminal.",
@@ -156,7 +157,7 @@ impl Error for InitError {
 
     fn cause(&self) -> Option<&Error> {
         match *self {
-            InitError::Opt(_, Some(ref e)) => Some(&**e),
+            InitError::BufferStderrFailed(ref e) => Some(e),
             _ => None
         }
     }
@@ -204,13 +205,10 @@ mod running {
 // RAII guard for input redirection
 #[cfg(unix)]
 mod redirect {
-    use std::error::Error;
-
     use libc;
-    use std::old_io::{util, IoError, PipeStream};
+    use std::old_io::{util, IoError, IoErrorKind, PipeStream, standard_error};
     use std::old_io::pipe::PipePair;
     use std::os::unix::AsRawFd;
-    use super::{InitError, InitOption};
     use super::running::RunningGuard;
 
     pub struct Redirect {
@@ -244,15 +242,15 @@ mod redirect {
     // The reason we take the RunningGuard is to make sure we don't try to redirect before the
     // TermBox is set up.  Otherwise it is possible to race with other threads trying to set up the
     // RustBox.
-    fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, Option<Box<Error + 'static>>> {
+    fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, IoError> {
         // Create a pipe pair.
-        let mut pair = try!(PipeStream::pair().map_err( |e| Some(Box::new(e) as Box<Error>)));
+        let mut pair = try!(PipeStream::pair());
         unsafe {
             let new_fd = new.as_raw_fd();
             // Copy new_fd to dup_fd.
             let dup_fd = match libc::dup(new_fd) {
-                -1 => return Err(Some(Box::new(IoError::last_error()) as Box<Error>)),
-                fd => try!(PipeStream::open(fd).map_err( |e| Some(Box::new(e) as Box<Error>))),
+                -1 => return Err(IoError::last_error()),
+                fd => try!(PipeStream::open(fd)),
             };
             // Make the writer nonblocking.  This means that even if the stderr pipe fills up,
             // exceptions from stack traces will not block the program.  Unfortunately, if this
@@ -261,8 +259,11 @@ mod redirect {
             let res = libc::fcntl(old_fd, libc::F_SETFL, libc::O_NONBLOCK);
             if res != 0 {
                 return Err(if res == -1 {
-                    Some(Box::new(IoError::last_error()) as Box<Error>)
-                } else { None }) // This should really never happen, but no reason to unwind here.
+                    IoError::last_error()
+                } else { 
+                 // This should really never happen, but no reason to unwind here.
+                 standard_error(IoErrorKind::OtherIoError)
+                });
             }
             // Reopen new_fd as writer.
             let fd = libc::dup2(old_fd, new_fd);
@@ -281,28 +282,17 @@ mod redirect {
                     fd: new,
                 })
             } else {
-                Err(if fd == -1 { Some(Box::new(IoError::last_error()) as Box<Error>) } else { None })
+                Err(if fd == -1 {
+                    IoError::last_error()
+                } else {
+                    standard_error(IoErrorKind::OtherIoError)
+                })
             }
         }
     }
 
-    pub fn redirect_stderr(stderr: &mut Option<Redirect>,
-                           rg: &RunningGuard) -> Result<(), InitError> {
-        match *stderr {
-            Some(_) => {
-                // Can only redirect once.
-                Err(InitError::Opt(InitOption::BufferStderr, None))
-            },
-            None => {
-                *stderr = Some(try!(redirect(
-                            try!(PipeStream::open(libc::STDERR_FILENO)
-                            .map_err( |e| InitError::Opt(InitOption::BufferStderr,
-                                                         Some(Box::new(e) as Box<Error>)) )),
-                            rg)
-                        .map_err( |e| InitError::Opt(InitOption::BufferStderr, e))));
-                Ok(())
-            }
-        }
+    pub fn redirect_stderr(rg: &RunningGuard) -> Result<Redirect, IoError> {
+        Ok(try!(redirect(try!(PipeStream::open(libc::STDERR_FILENO)), rg)))
     }
 }
 
@@ -311,9 +301,8 @@ mod redirect {
 mod redirect {
     pub enum Redirect { }
 
-    pub fn redirect_stderr(_: &mut Option<Redirect>,
-                           _: &super::RunningGuard) -> Result<(), super::InitError> {
-        Err(super::InitError::Opt(super::InitOption::BufferStderr, None))
+    pub fn redirect_stderr(_: &super::RunningGuard) -> Result<Redirect, IoError> {
+        Err(standard_error(IoErrorKind::OtherIoError))
     }
 }
 
@@ -333,7 +322,7 @@ pub struct RustBox {
 impl !Send for RustBox {}
 
 #[derive(Copy,Debug)]
-pub enum InitOption {
+pub struct InitOptions {
     /// Use this option to automatically buffer stderr while RustBox is running.  It will be
     /// written when RustBox exits.
     ///
@@ -341,31 +330,53 @@ pub enum InitOption {
     /// pipe fills up, subsequent writes will fail until RustBox exits.  If this is a concern for
     /// your program, don't use RustBox's default pipe-based redirection; instead, redirect stderr
     /// to a log file or another process that is capable of handling it better.
-    BufferStderr,
-
+    pub buffer_stderr: bool,
     /// Use this option to initialize with a specific input mode
     ///
     /// See InputMode enum for details on the variants.
-    InputMode(InputMode),
+    pub input_mode: InputMode,
+}
+
+impl Default for InitOptions {
+    fn default() -> Self {
+        InitOptions {
+            buffer_stderr: false,
+            input_mode: InputMode::Current,
+        }
+    }
 }
 
 impl RustBox {
-    pub fn init(opts: &[Option<InitOption>]) -> Result<RustBox, InitError> {
+    /// Initialize rustbox.
+    ///
+    /// For the default options, you can use:
+    ///
+    /// ```
+    /// use rustbox::RustBox;
+    /// use std::default::Default;
+    /// let rb = RustBox::init(Default::default());
+    /// ```
+    ///
+    /// Otherwise, you can specify:
+    ///
+    /// ```
+    /// use rustbox::{RustBox, InitOptions};
+    /// use std::default::Default;
+    /// let rb = RustBox::init(InitOptions { buffer_stderr: true, ..Default::default() });
+    /// ```
+    pub fn init(opts: InitOptions) -> Result<RustBox, InitError> {
         // Acquire RAII lock.  This might seem like overkill, but it is easy to forget to release
         // it in the maze of error conditions below.
         let running = match running::run() {
             Some(r) => r,
             None => return Err(InitError::AlreadyOpen)
         };
-        // Time to check our options.
-        let mut stderr = None;
-        let mut input_mode = None;
-        for opt in opts.iter().filter_map(|&opt| opt) {
-            match opt {
-                InitOption::BufferStderr => try!(redirect::redirect_stderr(&mut stderr, &running)),
-                InitOption::InputMode(mode) => input_mode = Some(mode),
-            }
-        }
+        let stderr = if opts.buffer_stderr {
+            Some(try!(redirect::redirect_stderr(&running).map_err(|e| InitError::BufferStderrFailed(e))))
+        } else {
+            None
+        };
+
         // Create the RustBox.
         let rb = unsafe { match termbox::tb_init() {
             0 => RustBox {
@@ -376,8 +387,9 @@ impl RustBox {
                 return Err(InitError::TermBox(FromPrimitive::from_int(res as isize)))
             }
         }};
-        if let Some(mode) = input_mode {
-            rb.set_input_mode(mode);
+        match opts.input_mode {
+            InputMode::Current => (),
+            _ => rb.set_input_mode(opts.input_mode),
         }
         Ok(rb)
     }
