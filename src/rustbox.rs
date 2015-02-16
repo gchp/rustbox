@@ -73,7 +73,7 @@ mod style {
     }
 }
 
-const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 0, h: 0 };
+const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 0, h: 0, x: 0, y: 0 };
 
 // FIXME: Rust doesn't support this enum representation.
 // #[derive(Copy,FromPrimitive,Debug)]
