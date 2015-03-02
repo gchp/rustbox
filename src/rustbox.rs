@@ -1,9 +1,8 @@
-#![feature(hash)]
-#![feature(io)]
 #![feature(libc)]
 #![feature(std_misc)]
 #![feature(core)]
 #![feature(optin_builtin_traits)]
+#![feature(old_io)]
 
 extern crate libc;
 extern crate "termbox-sys" as termbox;
