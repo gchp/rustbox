@@ -414,7 +414,6 @@ impl RustBox {
         unsafe { termbox::tb_set_cursor(x as c_int, y as c_int) }
     }
 
-    // Unsafe because u8 is not guaranteed to be a UTF-8 character
     pub unsafe fn change_cell(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
         termbox::tb_change_cell(x as c_int, y as c_int, ch, fg, bg)
     }
