@@ -20,7 +20,7 @@ use std::old_io::IoError;
 use std::default::Default;
 
 use termbox::RawEvent;
-use libc::{c_int, c_uint};
+use libc::c_int;
 
 #[derive(Copy)]
 pub enum Event {
@@ -416,7 +416,7 @@ impl RustBox {
 
     // Unsafe because u8 is not guaranteed to be a UTF-8 character
     pub unsafe fn change_cell(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
-        termbox::tb_change_cell(x as c_uint, y as c_uint, ch, fg, bg)
+        termbox::tb_change_cell(x as c_int, y as c_int, ch, fg, bg)
     }
 
     pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
@@ -448,7 +448,7 @@ impl RustBox {
     pub fn peek_event(&self, timeout: Duration) -> EventResult<Event> {
         let ev = NIL_RAW_EVENT;
         let rc = unsafe {
-            termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_uint)
+            termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_int)
         };
         unpack_event(rc, &ev)
     }
