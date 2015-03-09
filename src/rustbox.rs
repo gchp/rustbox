@@ -13,6 +13,7 @@ pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
 use std::error::Error;
 use std::fmt;
+use std::char;
 use std::time::duration::Duration;
 use std::num::FromPrimitive;
 use std::old_io::IoError;
@@ -21,9 +22,14 @@ use std::default::Default;
 use termbox::RawEvent;
 use libc::c_int;
 
+pub mod keyboard;
+
+pub use keyboard::Key;
+
 #[derive(Copy)]
 pub enum Event {
-    KeyEvent(u8, u16, u32),
+    KeyEventRaw(u8, u16, u32),
+    KeyEvent(Option<Key>),
     ResizeEvent(i32, i32),
     NoEvent
 }
@@ -109,10 +115,27 @@ impl fmt::Display for EventError {
     }
 }
 
-fn unpack_event(ev_type: c_int, ev: &RawEvent) -> EventResult<Event> {
+/// Unpack a RawEvent to an Event
+///
+/// if the `raw` parameter is true, then the Event variant will be the raw
+/// representation of the event.
+///     for instance KeyEventRaw instead of KeyEvent
+///
+/// This is useful if you want to interpret the raw event data yourself, rather
+/// than having rustbox translate it to its own representation.
+fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> {
     match ev_type {
         0 => Ok(Event::NoEvent),
-        1 => Ok(Event::KeyEvent(ev.emod, ev.key, ev.ch)),
+        1 => Ok(
+            if raw {
+                Event::KeyEventRaw(ev.emod, ev.key, ev.ch)
+            } else {
+                let k = match ev.key {
+                    0 => char::from_u32(ev.ch).map(|c| Key::Char(c)),
+                    a => Key::from_code(a),
+                };
+                Event::KeyEvent(k)
+            }),
         2 => Ok(Event::ResizeEvent(ev.w, ev.h)),
         // FIXME: Rust doesn't support this error representation
         // res => FromPrimitive::from_int(res as isize),
@@ -383,7 +406,7 @@ impl RustBox {
                 _running: running,
             },
             res => {
-                return Err(InitError::TermBox(FromPrimitive::from_int(res as isize)))
+                return Err(InitError::TermBox(FromPrimitive::from_isize(res as isize)))
             }
         }};
         match opts.input_mode {
@@ -435,20 +458,20 @@ impl RustBox {
         }
     }
 
-    pub fn poll_event(&self) -> EventResult<Event> {
+    pub fn poll_event(&self, raw: bool) -> EventResult<Event> {
         let ev = NIL_RAW_EVENT;
         let rc = unsafe {
             termbox::tb_poll_event(&ev as *const RawEvent)
         };
-        unpack_event(rc, &ev)
+        unpack_event(rc, &ev, raw)
     }
 
-    pub fn peek_event(&self, timeout: Duration) -> EventResult<Event> {
+    pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult<Event> {
         let ev = NIL_RAW_EVENT;
         let rc = unsafe {
             termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_int)
         };
-        unpack_event(rc, &ev)
+        unpack_event(rc, &ev, raw)
     }
 
     pub fn set_input_mode(&self, mode: InputMode) {

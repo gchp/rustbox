@@ -9,6 +9,7 @@ use std::error::Error;
 use std::default::Default;
 
 use rustbox::{Color, RustBox, InitOptions};
+use rustbox::Key;
 
 fn main() {
     let rustbox = match RustBox::init(InitOptions {
@@ -24,11 +25,11 @@ fn main() {
                   "Press 'q' to quit.");
     rustbox.present();
     loop {
-        match rustbox.poll_event() {
-            Ok(rustbox::Event::KeyEvent(_, _, ch)) => {
-                match char::from_u32(ch) {
-                    Some('q') => { break; },
-                    _ => {}
+        match rustbox.poll_event(false) {
+            Ok(rustbox::Event::KeyEvent(key)) => {
+                match key {
+                    Some(Key::Char('q')) => { break; }
+                    _ => { }
                 }
             },
             Err(e) => panic!("{}", e.description()),
