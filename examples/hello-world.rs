@@ -23,8 +23,8 @@ fn main() {
     rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!");
     rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black,
                   "Press 'q' to quit.");
-    rustbox.present();
     loop {
+        rustbox.present();
         match rustbox.poll_event(false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
                 match key {
