@@ -2,8 +2,6 @@
 #![feature(std_misc)]
 #![feature(core)]
 #![feature(optin_builtin_traits)]
-#![feature(old_io)]
-#![feature(io_ext)]
 
 extern crate libc;
 extern crate termbox_sys as termbox;
@@ -17,7 +15,6 @@ use std::fmt;
 use std::char;
 use std::time::duration::Duration;
 use std::num::FromPrimitive;
-use std::old_io::IoError;
 use std::default::Default;
 
 use termbox::RawEvent;
@@ -155,7 +152,6 @@ pub enum InitErrorKind {
 
 #[derive(Debug)]
 pub enum InitError {
-    BufferStderrFailed(IoError),
     AlreadyOpen,
     TermBox(Option<InitErrorKind>),
 }
@@ -169,20 +165,12 @@ impl fmt::Display for InitError {
 impl Error for InitError {
     fn description(&self) -> &str {
         match *self {
-            InitError::BufferStderrFailed(_) => "Could not redirect stderr.",
             InitError::AlreadyOpen => "RustBox is already open.",
             InitError::TermBox(e) => e.map_or("Unexpected TermBox return code.", |e| match e {
                 InitErrorKind::UnsupportedTerminal => "Unsupported terminal.",
                 InitErrorKind::FailedToOpenTty => "Failed to open TTY.",
                 InitErrorKind::PipeTrapError => "Pipe trap error.",
             }),
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        match *self {
-            InitError::BufferStderrFailed(ref e) => Some(e),
-            _ => None
         }
     }
 }
@@ -226,115 +214,8 @@ mod running {
     }
 }
 
-// RAII guard for input redirection
-#[cfg(unix)]
-mod redirect {
-    use libc;
-    use std::old_io::{util, IoError, IoErrorKind, PipeStream, standard_error};
-    use std::old_io::pipe::PipePair;
-    use std::os::unix::io::AsRawFd;
-    use super::running::RunningGuard;
-
-    pub struct Redirect {
-        pair: PipePair,
-        fd: PipeStream,
-    }
-
-    impl Drop for Redirect {
-        fn drop(&mut self) {
-            // We make sure that we never actually create the Redirect without also taking a
-            // RunningGuard.  This means that we know that this will always be dropped immediately
-            // before the RunningGuard is destroyed, and *after* a RustBox containing one is
-            // destroyed.
-            //
-            // We rely on destructor order here: destructors are always executed top-down,  so as
-            // long as this is included above the RunningGuard in the RustBox struct, we can be
-            // confident that it is destroyed while we're still holding onto the lock.
-            unsafe {
-                let old_fd = self.pair.writer.as_raw_fd();
-                let new_fd = self.fd.as_raw_fd();
-                // Reopen new_fd as writer.
-                // (Note that if we fail here, we can't really do anything about it, so just ignore any
-                // errors).
-                if libc::dup2(old_fd, new_fd) != new_fd { return }
-            }
-            // Copy from reader to writer.
-            drop(util::copy(&mut self.pair.reader, &mut self.pair.writer));
-        }
-    }
-
-    // The reason we take the RunningGuard is to make sure we don't try to redirect before the
-    // TermBox is set up.  Otherwise it is possible to race with other threads trying to set up the
-    // RustBox.
-    fn redirect(new: PipeStream, _: &RunningGuard) -> Result<Redirect, IoError> {
-        // Create a pipe pair.
-        let mut pair = try!(PipeStream::pair());
-        unsafe {
-            let new_fd = new.as_raw_fd();
-            // Copy new_fd to dup_fd.
-            let dup_fd = match libc::dup(new_fd) {
-                -1 => return Err(IoError::last_error()),
-                fd => try!(PipeStream::open(fd)),
-            };
-            // Make the writer nonblocking.  This means that even if the stderr pipe fills up,
-            // exceptions from stack traces will not block the program.  Unfortunately, if this
-            // does happen stderr outputwill be lost until RustBox exits.
-            let old_fd = pair.writer.as_raw_fd();
-            let res = libc::fcntl(old_fd, libc::F_SETFL, libc::O_NONBLOCK);
-            if res != 0 {
-                return Err(if res == -1 {
-                    IoError::last_error()
-                } else { 
-                 // This should really never happen, but no reason to unwind here.
-                 standard_error(IoErrorKind::OtherIoError)
-                });
-            }
-            // Reopen new_fd as writer.
-            let fd = libc::dup2(old_fd, new_fd);
-            if fd == new_fd {
-                // On success, the new file descriptor should be returned.  Replace the old one
-                // with dup_fd, since we no longer need an explicit reference to the writer.
-                // Note that it is *possible* that some other thread tried to take over stderr
-                // between when we did and now, causing a race here.  RustBox won't do it, though.
-                // And it's honestly not clear how to guarantee correct behavior there anyway,
-                // since if the change had come a fraction of a second later we still probably
-                // wouldn't want to overwite it.  In general this is a good argument for why the
-                // redirect behavior is optional.
-                pair.writer = dup_fd;
-                Ok(Redirect {
-                    pair: pair,
-                    fd: new,
-                })
-            } else {
-                Err(if fd == -1 {
-                    IoError::last_error()
-                } else {
-                    standard_error(IoErrorKind::OtherIoError)
-                })
-            }
-        }
-    }
-
-    pub fn redirect_stderr(rg: &RunningGuard) -> Result<Redirect, IoError> {
-        Ok(try!(redirect(try!(PipeStream::open(libc::STDERR_FILENO)), rg)))
-    }
-}
-
-#[cfg(not(unix))]
-// Not sure how we'll do this on Windows, unimplemented for now.
-mod redirect {
-    pub enum Redirect { }
-
-    pub fn redirect_stderr(_: &super::RunningGuard) -> Result<Redirect, IoError> {
-        Err(standard_error(IoErrorKind::OtherIoError))
-    }
-}
-
 #[allow(missing_copy_implementations)]
 pub struct RustBox {
-    // We only bother to redirect stderr for the moment, since it's used for panic!
-    _stderr: Option<redirect::Redirect>,
-
     // RAII lock.
     //
     // Note that running *MUST* be the last field in the destructor, since destructors run in
@@ -347,14 +228,6 @@ impl !Send for RustBox {}
 
 #[derive(Copy,Debug)]
 pub struct InitOptions {
-    /// Use this option to automatically buffer stderr while RustBox is running.  It will be
-    /// written when RustBox exits.
-    ///
-    /// This option uses a nonblocking OS pipe to buffer stderr output.  This means that if the
-    /// pipe fills up, subsequent writes will fail until RustBox exits.  If this is a concern for
-    /// your program, don't use RustBox's default pipe-based redirection; instead, redirect stderr
-    /// to a log file or another process that is capable of handling it better.
-    pub buffer_stderr: bool,
     /// Use this option to initialize with a specific input mode
     ///
     /// See InputMode enum for details on the variants.
@@ -364,7 +237,6 @@ pub struct InitOptions {
 impl Default for InitOptions {
     fn default() -> Self {
         InitOptions {
-            buffer_stderr: false,
             input_mode: InputMode::Current,
         }
     }
@@ -386,7 +258,7 @@ impl RustBox {
     /// ```
     /// use rustbox::{RustBox, InitOptions};
     /// use std::default::Default;
-    /// let rb = RustBox::init(InitOptions { buffer_stderr: true, ..Default::default() });
+    /// let rb = RustBox::init(InitOptions { input_mode: rustbox::InputMode::Esc, ..Default::default() });
     /// ```
     pub fn init(opts: InitOptions) -> Result<RustBox, InitError> {
         // Acquire RAII lock.  This might seem like overkill, but it is easy to forget to release
@@ -395,16 +267,10 @@ impl RustBox {
             Some(r) => r,
             None => return Err(InitError::AlreadyOpen)
         };
-        let stderr = if opts.buffer_stderr {
-            Some(try!(redirect::redirect_stderr(&running).map_err(|e| InitError::BufferStderrFailed(e))))
-        } else {
-            None
-        };
 
         // Create the RustBox.
         let rb = unsafe { match termbox::tb_init() {
             0 => RustBox {
-                _stderr: stderr,
                 _running: running,
             },
             res => {
