@@ -28,23 +28,18 @@ git = "https://github.com/gchp/rustbox.git"
 Then, in your `src/example.rs`:
 
 ```rust
-#![feature(io)]
 #![feature(core)]
 
 extern crate rustbox;
 
-use std::char;
-use std::old_io::stdio;
 use std::error::Error;
 use std::default::Default;
 
-use rustbox::{Color, Key, RustBox, InitOptions};
+use rustbox::{Color, RustBox};
+use rustbox::Key;
 
 fn main() {
-    let rustbox = match RustBox::init(InitOptions {
-        buffer_stderr: stdio::stderr_raw().isatty(),
-        ..Default::default()
-    }) {
+    let rustbox = match RustBox::init(Default::default()) {
         Result::Ok(v) => v,
         Result::Err(e) => panic!("{}", e),
     };
