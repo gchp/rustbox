@@ -230,7 +230,7 @@ mod redirect {
     use libc;
     use std::old_io::{util, IoError, IoErrorKind, PipeStream, standard_error};
     use std::old_io::pipe::PipePair;
-    use std::os::unix::AsRawFd;
+    use std::os::unix::io::AsRawFd;
     use super::running::RunningGuard;
 
     pub struct Redirect {
