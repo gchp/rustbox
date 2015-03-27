@@ -3,9 +3,10 @@
 #![feature(core)]
 #![feature(optin_builtin_traits)]
 #![feature(old_io)]
+#![feature(io_ext)]
 
 extern crate libc;
-extern crate "termbox-sys" as termbox;
+extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
 pub use self::running::running;
@@ -152,6 +153,7 @@ pub enum InitErrorKind {
     PipeTrapError = -3,
 }
 
+#[derive(Debug)]
 pub enum InitError {
     BufferStderrFailed(IoError),
     AlreadyOpen,
