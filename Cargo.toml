@@ -21,4 +21,4 @@ name = "rustbox"
 
 [dependencies]
 bitflags = "0.1.0"
-termbox-sys = "0.2.5"
+termbox-sys = "0.2.6"

@@ -27,7 +27,7 @@ pub mod keyboard;
 
 pub use keyboard::Key;
 
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub enum Event {
     KeyEventRaw(u8, u16, u32),
     KeyEvent(Option<Key>),
@@ -35,7 +35,7 @@ pub enum Event {
     NoEvent
 }
 
-#[derive(Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum InputMode {
     Current = 0x00,
 
@@ -47,7 +47,7 @@ pub enum InputMode {
     Alt     = 0x02,
 }
 
-#[derive(Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[repr(C,u16)]
 pub enum Color {
     Default =  0x00,
@@ -92,29 +92,13 @@ const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 
 // pub type EventError = Option<EventErrorKind>;
 #[allow(non_snake_case)]
 pub mod EventErrorKind {
-    #[derive(Copy,Debug)]
+    #[derive(Clone, Copy,Debug)]
     pub struct Error;
 }
 
 pub type EventError = Option<EventErrorKind::Error>;
 
 pub type EventResult<T> = Result<T, EventError>;
-
-impl Error for EventError {
-    fn description(&self) -> &str {
-        match *self {
-            // TODO: Check errno here
-            Some(EventErrorKind::Error) => "Unknown error.",
-            None => "Unexpected return code."
-        }
-    }
-}
-
-impl fmt::Display for EventError {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "{}", *self)
-    }
-}
 
 /// Unpack a RawEvent to an Event
 ///
@@ -145,7 +129,7 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> 
     }
 }
 
-#[derive(Copy,FromPrimitive,Debug)]
+#[derive(Clone, Copy,FromPrimitive,Debug)]
 #[repr(C,isize)]
 pub enum InitErrorKind {
     UnsupportedTerminal = -1,
@@ -345,7 +329,7 @@ pub struct RustBox {
 // Termbox is not thread safe
 impl !Send for RustBox {}
 
-#[derive(Copy,Debug)]
+#[derive(Clone, Copy,Debug)]
 pub struct InitOptions {
     /// Use this option to automatically buffer stderr while RustBox is running.  It will be
     /// written when RustBox exits.
