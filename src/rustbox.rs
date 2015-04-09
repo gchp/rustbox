@@ -3,15 +3,16 @@
 #![feature(core)]
 #![feature(optin_builtin_traits)]
 
+extern crate gag;
 extern crate libc;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
-pub use self::running::running;
 pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
 use std::error::Error;
 use std::fmt;
+use std::io;
 use std::char;
 use std::time::duration::Duration;
 use std::num::FromPrimitive;
@@ -19,6 +20,7 @@ use std::default::Default;
 
 use termbox::RawEvent;
 use libc::c_int;
+use gag::Hold;
 
 pub mod keyboard;
 
@@ -126,7 +128,7 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> 
     }
 }
 
-#[derive(Clone, Copy,FromPrimitive,Debug)]
+#[derive(Clone, Copy, FromPrimitive, Debug)]
 #[repr(C,isize)]
 pub enum InitErrorKind {
     UnsupportedTerminal = -1,
@@ -136,6 +138,7 @@ pub enum InitErrorKind {
 
 #[derive(Debug)]
 pub enum InitError {
+    BufferStderrFailed(io::Error),
     AlreadyOpen,
     TermBox(Option<InitErrorKind>),
 }
@@ -149,62 +152,28 @@ impl fmt::Display for InitError {
 impl Error for InitError {
     fn description(&self) -> &str {
         match *self {
-            InitError::AlreadyOpen => "RustBox is already open.",
-            InitError::TermBox(e) => e.map_or("Unexpected TermBox return code.", |e| match e {
-                InitErrorKind::UnsupportedTerminal => "Unsupported terminal.",
-                InitErrorKind::FailedToOpenTty => "Failed to open TTY.",
-                InitErrorKind::PipeTrapError => "Pipe trap error.",
+            InitError::BufferStderrFailed(_) => "Could not redirect stderr",
+            InitError::AlreadyOpen => "RustBox is already open",
+            InitError::TermBox(e) => e.map_or("Unexpected TermBox return code", |e| match e {
+                InitErrorKind::UnsupportedTerminal => "Unsupported terminal",
+                InitErrorKind::FailedToOpenTty => "Failed to open TTY",
+                InitErrorKind::PipeTrapError => "Pipe trap error",
             }),
         }
     }
-}
 
-mod running {
-    use std::sync::atomic::{self, AtomicBool};
-
-    // The state of the RustBox is protected by the lock.  Yay, global state!
-    static RUSTBOX_RUNNING: AtomicBool = atomic::ATOMIC_BOOL_INIT;
-
-    /// true iff RustBox is currently running.  Beware of races here--don't rely on this for anything
-    /// critical unless you happen to know that RustBox cannot change state when it is called (a good
-    /// usecase would be checking to see if it's worth risking double printing backtraces to avoid
-    /// having them swallowed up by RustBox).
-    pub fn running() -> bool {
-        RUSTBOX_RUNNING.load(atomic::Ordering::SeqCst)
-    }
-
-    // Internal RAII guard used to ensure we release the running lock whenever we acquire it.
-    #[allow(missing_copy_implementations)]
-    pub struct RunningGuard(());
-
-    pub fn run() -> Option<RunningGuard> {
-        // Ensure that we are not already running and simultaneously set RUSTBOX_RUNNING using an
-        // atomic swap.  This ensures that contending threads don't trample each other.
-        if RUSTBOX_RUNNING.swap(true, atomic::Ordering::SeqCst) {
-            // The Rustbox was already running.
-            None
-        } else {
-            // The RustBox was not already running, and now we have the lock.
-            Some(RunningGuard(()))
-        }
-    }
-
-    impl Drop for RunningGuard {
-        fn drop(&mut self) {
-            // Indicate that we're free now.  We could probably get away with lower atomicity here,
-            // but there's no reason to take that chance.
-            RUSTBOX_RUNNING.store(false, atomic::Ordering::SeqCst);
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            InitError::BufferStderrFailed(ref e) => Some(e),
+            _ => None
         }
     }
 }
 
 #[allow(missing_copy_implementations)]
 pub struct RustBox {
-    // RAII lock.
-    //
-    // Note that running *MUST* be the last field in the destructor, since destructors run in
-    // top-down order.  Otherwise it will not properly protect the above fields.
-    _running: running::RunningGuard,
+   // We only bother to redirect stderr for the moment, since it's used for panic!
+   _stderr: Option<Hold>,
 }
 
 // Termbox is not thread safe
@@ -216,12 +185,22 @@ pub struct InitOptions {
     ///
     /// See InputMode enum for details on the variants.
     pub input_mode: InputMode,
+
+    /// Use this option to automatically buffer stderr while RustBox is running.  It will be
+    /// written when RustBox exits.
+    ///
+    /// This option uses a nonblocking OS pipe to buffer stderr output.  This means that if the
+    /// pipe fills up, subsequent writes will fail until RustBox exits.  If this is a concern for
+    /// your program, don't use RustBox's default pipe-based redirection; instead, redirect stderr
+    /// to a log file or another process that is capable of handling it better.
+    pub buffer_stderr: bool,
 }
 
 impl Default for InitOptions {
     fn default() -> Self {
         InitOptions {
             input_mode: InputMode::Current,
+            buffer_stderr: false,
         }
     }
 }
@@ -245,17 +224,16 @@ impl RustBox {
     /// let rb = RustBox::init(InitOptions { input_mode: rustbox::InputMode::Esc, ..Default::default() });
     /// ```
     pub fn init(opts: InitOptions) -> Result<RustBox, InitError> {
-        // Acquire RAII lock.  This might seem like overkill, but it is easy to forget to release
-        // it in the maze of error conditions below.
-        let running = match running::run() {
-            Some(r) => r,
-            None => return Err(InitError::AlreadyOpen)
+        let stderr = if opts.buffer_stderr {
+            Some(try!(Hold::stderr().map_err(|e| InitError::BufferStderrFailed(e))))
+        } else {
+            None
         };
 
         // Create the RustBox.
         let rb = unsafe { match termbox::tb_init() {
             0 => RustBox {
-                _running: running,
+                _stderr: stderr,
             },
             res => {
                 return Err(InitError::TermBox(FromPrimitive::from_isize(res as isize)))
