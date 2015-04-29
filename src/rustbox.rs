@@ -1,6 +1,5 @@
 #![feature(libc)]
 #![feature(std_misc)]
-#![feature(core)]
 #![feature(optin_builtin_traits)]
 
 extern crate gag;
