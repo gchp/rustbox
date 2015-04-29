@@ -5,6 +5,8 @@
 
 extern crate gag;
 extern crate libc;
+extern crate num;
+#[macro_use] extern crate enum_primitive;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
@@ -15,9 +17,9 @@ use std::fmt;
 use std::io;
 use std::char;
 use std::time::duration::Duration;
-use std::num::FromPrimitive;
 use std::default::Default;
 
+use num::FromPrimitive;
 use termbox::RawEvent;
 use libc::c_int;
 use gag::Hold;
@@ -128,12 +130,14 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> 
     }
 }
 
-#[derive(Clone, Copy, FromPrimitive, Debug)]
+enum_from_primitive! {
+#[derive(Clone, Copy, Debug)]
 #[repr(C,isize)]
 pub enum InitErrorKind {
     UnsupportedTerminal = -1,
     FailedToOpenTty = -2,
     PipeTrapError = -3,
+}
 }
 
 #[derive(Debug)]
