@@ -24,14 +24,17 @@ use libc::c_int;
 use gag::Hold;
 
 pub mod keyboard;
+pub mod mouse;
 
 pub use keyboard::Key;
+pub use mouse::Mouse;
 
 #[derive(Clone, Copy)]
 pub enum Event {
     KeyEventRaw(u8, u16, u32),
     KeyEvent(Option<Key>),
     ResizeEvent(i32, i32),
+    MouseEvent(Mouse, i32, i32),
     NoEvent
 }
 
@@ -125,6 +128,10 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> 
                 Event::KeyEvent(k)
             }),
         2 => Ok(Event::ResizeEvent(ev.w, ev.h)),
+        3 => {
+            let mouse = Mouse::from_code(ev.key).unwrap_or(Mouse::Left);
+            Ok(Event::MouseEvent(mouse, ev.x, ev.y))
+        }
         // FIXME: Rust doesn't support this error representation
         // res => FromPrimitive::from_int(res as isize),
         -1 => Err(Some(EventErrorKind::Error)),
