@@ -89,22 +89,43 @@ mod style {
 
 const NIL_RAW_EVENT: RawEvent = RawEvent { etype: 0, emod: 0, key: 0, ch: 0, w: 0, h: 0, x: 0, y: 0 };
 
-// FIXME: Rust doesn't support this enum representation.
-// #[derive(Copy,FromPrimitive,Debug)]
-// #[repr(C,int)]
-// pub enum EventErrorKind {
-//     Error = -1,
-// }
-// pub type EventError = Option<EventErrorKind>;
-#[allow(non_snake_case)]
-pub mod EventErrorKind {
-    #[derive(Clone, Copy,Debug)]
-    pub struct Error;
+#[derive(Debug)]
+pub enum EventError {
+   TermboxError,
+   Unknown(isize),
 }
 
-pub type EventError = Option<EventErrorKind::Error>;
+impl fmt::Display for EventError {
+   fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+      write!(fmt, "{}", self.description())
+   }
+}
 
-pub type EventResult<T> = Result<T, EventError>;
+impl Error for EventError {
+   fn description(&self) -> &str {
+      match *self {
+         EventError::TermboxError => "Error in Termbox",
+         // I don't know how to format this without lifetime error.
+         // EventError::Unknown(n) => &format!("There was an unknown error. Error code: {}", n),
+         EventError::Unknown(_) => "Unknown error in Termbox",
+      }
+   }
+}
+
+impl FromPrimitive for EventError {
+   fn from_i64(n: i64) -> Option<EventError> {
+      match n {
+         -1 => Some(EventError::TermboxError),
+         n => Some(EventError::Unknown(n as isize)),
+      }
+   }
+
+   fn from_u64(n: u64) -> Option<EventError> {
+      Some(EventError::Unknown(n as isize))
+   }
+}
+
+pub type EventResult = Result<Event, EventError>;
 
 /// Unpack a RawEvent to an Event
 ///
@@ -114,7 +135,7 @@ pub type EventResult<T> = Result<T, EventError>;
 ///
 /// This is useful if you want to interpret the raw event data yourself, rather
 /// than having rustbox translate it to its own representation.
-fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> {
+fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult {
     match ev_type {
         0 => Ok(Event::NoEvent),
         1 => Ok(
@@ -131,29 +152,20 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> 
         3 => {
             let mouse = Mouse::from_code(ev.key).unwrap_or(Mouse::Left);
             Ok(Event::MouseEvent(mouse, ev.x, ev.y))
-        }
-        // FIXME: Rust doesn't support this error representation
-        // res => FromPrimitive::from_int(res as isize),
-        -1 => Err(Some(EventErrorKind::Error)),
-        _ => Err(None)
+        },
+        // `unwrap` is safe here because FromPrimitive for EventError only returns `Some`.
+        n => Err(FromPrimitive::from_isize(n as isize).unwrap()),
     }
-}
-
-enum_from_primitive! {
-#[derive(Clone, Copy, Debug)]
-#[repr(C,isize)]
-pub enum InitErrorKind {
-    UnsupportedTerminal = -1,
-    FailedToOpenTty = -2,
-    PipeTrapError = -3,
-}
 }
 
 #[derive(Debug)]
 pub enum InitError {
     BufferStderrFailed(io::Error),
     AlreadyOpen,
-    TermBox(Option<InitErrorKind>),
+    UnsupportedTerminal,
+    FailedToOpenTTy,
+    PipeTrapError,
+    Unknown(isize),
 }
 
 impl fmt::Display for InitError {
@@ -167,11 +179,10 @@ impl Error for InitError {
         match *self {
             InitError::BufferStderrFailed(_) => "Could not redirect stderr",
             InitError::AlreadyOpen => "RustBox is already open",
-            InitError::TermBox(e) => e.map_or("Unexpected TermBox return code", |e| match e {
-                InitErrorKind::UnsupportedTerminal => "Unsupported terminal",
-                InitErrorKind::FailedToOpenTty => "Failed to open TTY",
-                InitErrorKind::PipeTrapError => "Pipe trap error",
-            }),
+            InitError::UnsupportedTerminal => "Unsupported terminal",
+            InitError::FailedToOpenTTy => "Failed to open TTY",
+            InitError::PipeTrapError => "Pipe trap error",
+            InitError::Unknown(_) => "Unknown error from Termbox",
         }
     }
 
@@ -181,6 +192,21 @@ impl Error for InitError {
             _ => None
         }
     }
+}
+
+impl FromPrimitive for InitError {
+   fn from_i64(n: i64) -> Option<InitError> {
+      match n {
+         -1 => Some(InitError::UnsupportedTerminal),
+         -2 => Some(InitError::FailedToOpenTTy),
+         -3 => Some(InitError::PipeTrapError),
+         n => Some(InitError::Unknown(n as isize)),
+      }
+   }
+
+   fn from_u64(n: u64) -> Option<InitError> {
+      Some(InitError::Unknown(n as isize))
+   }
 }
 
 #[allow(missing_copy_implementations)]
@@ -249,7 +275,7 @@ impl RustBox {
                 _stderr: stderr,
             },
             res => {
-                return Err(InitError::TermBox(FromPrimitive::from_isize(res as isize)))
+                return Err(FromPrimitive::from_isize(res as isize).unwrap())
             }
         }};
         match opts.input_mode {
@@ -301,7 +327,7 @@ impl RustBox {
         }
     }
 
-    pub fn poll_event(&self, raw: bool) -> EventResult<Event> {
+    pub fn poll_event(&self, raw: bool) -> EventResult {
         let ev = NIL_RAW_EVENT;
         let rc = unsafe {
             termbox::tb_poll_event(&ev as *const RawEvent)
@@ -309,7 +335,7 @@ impl RustBox {
         unpack_event(rc, &ev, raw)
     }
 
-    pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult<Event> {
+    pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult {
         let ev = NIL_RAW_EVENT;
         let rc = unsafe {
             termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_int)
