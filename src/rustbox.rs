@@ -24,27 +24,33 @@ use libc::c_int;
 use gag::Hold;
 
 pub mod keyboard;
+pub mod mouse;
 
 pub use keyboard::Key;
+pub use mouse::Mouse;
 
 #[derive(Clone, Copy)]
 pub enum Event {
     KeyEventRaw(u8, u16, u32),
     KeyEvent(Option<Key>),
     ResizeEvent(i32, i32),
+    MouseEvent(Mouse, i32, i32),
     NoEvent
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum InputMode {
-    Current = 0x00,
-
-    /// When ESC sequence is in the buffer and it doesn't match any known
-    /// ESC sequence => ESC means TB_KEY_ESC
-    Esc     = 0x01,
-    /// When ESC sequence is in the buffer and it doesn't match any known
-    /// sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
-    Alt     = 0x02,
+bitflags! {
+    #[derive(Debug)]
+    flags InputMode: u16 {
+        const RB_INPUT_CURRENT = 0x00,
+        /// When ESC sequence is in the buffer and it doesn't match any known
+        /// ESC sequence => ESC means TB_KEY_ESC
+        const RB_INPUT_ESC     = 0x01,
+        /// When ESC sequence is in the buffer and it doesn't match any known
+        /// sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
+        const RB_INPUT_ALT     = 0x02,
+        /// Enables mouse input
+        const RB_INPUT_MOUSE   = 0x04
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -122,6 +128,10 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult<Event> 
                 Event::KeyEvent(k)
             }),
         2 => Ok(Event::ResizeEvent(ev.w, ev.h)),
+        3 => {
+            let mouse = Mouse::from_code(ev.key).unwrap_or(Mouse::Left);
+            Ok(Event::MouseEvent(mouse, ev.x, ev.y))
+        }
         // FIXME: Rust doesn't support this error representation
         // res => FromPrimitive::from_int(res as isize),
         -1 => Err(Some(EventErrorKind::Error)),
@@ -202,7 +212,7 @@ pub struct InitOptions {
 impl Default for InitOptions {
     fn default() -> Self {
         InitOptions {
-            input_mode: InputMode::Current,
+            input_mode: RB_INPUT_CURRENT,
             buffer_stderr: false,
         }
     }
@@ -243,7 +253,7 @@ impl RustBox {
             }
         }};
         match opts.input_mode {
-            InputMode::Current => (),
+            RB_INPUT_CURRENT => (),
             _ => rb.set_input_mode(opts.input_mode),
         }
         Ok(rb)
@@ -309,7 +319,7 @@ impl RustBox {
 
     pub fn set_input_mode(&self, mode: InputMode) {
         unsafe {
-            termbox::tb_select_input_mode(mode as c_int);
+            termbox::tb_select_input_mode(mode.bits() as c_int);
         }
     }
 }
