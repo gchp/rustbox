@@ -38,19 +38,16 @@ pub enum Event {
     NoEvent
 }
 
-bitflags! {
-    #[derive(Debug)]
-    flags InputMode: u16 {
-        const RB_INPUT_CURRENT = 0x00,
-        /// When ESC sequence is in the buffer and it doesn't match any known
-        /// ESC sequence => ESC means TB_KEY_ESC
-        const RB_INPUT_ESC     = 0x01,
-        /// When ESC sequence is in the buffer and it doesn't match any known
-        /// sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
-        const RB_INPUT_ALT     = 0x02,
-        /// Enables mouse input
-        const RB_INPUT_MOUSE   = 0x04
-    }
+#[derive(Clone, Copy, Debug)]
+pub enum InputMode {
+    Current = 0x00,
+
+    /// When ESC sequence is in the buffer and it doesn't match any known
+    /// ESC sequence => ESC means TB_KEY_ESC
+    Esc     = 0x01,
+    /// When ESC sequence is in the buffer and it doesn't match any known
+    /// sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
+    Alt     = 0x02,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -212,7 +209,7 @@ pub struct InitOptions {
 impl Default for InitOptions {
     fn default() -> Self {
         InitOptions {
-            input_mode: RB_INPUT_CURRENT,
+            input_mode: InputMode::Current,
             buffer_stderr: false,
         }
     }
@@ -253,7 +250,7 @@ impl RustBox {
             }
         }};
         match opts.input_mode {
-            RB_INPUT_CURRENT => (),
+            InputMode::Current => (),
             _ => rb.set_input_mode(opts.input_mode),
         }
         Ok(rb)
@@ -319,7 +316,7 @@ impl RustBox {
 
     pub fn set_input_mode(&self, mode: InputMode) {
         unsafe {
-            termbox::tb_select_input_mode(mode.bits() as c_int);
+            termbox::tb_select_input_mode(mode as c_int);
         }
     }
 }
