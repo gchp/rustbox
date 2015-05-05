@@ -5,7 +5,6 @@
 extern crate gag;
 extern crate libc;
 extern crate num;
-#[macro_use] extern crate enum_primitive;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
