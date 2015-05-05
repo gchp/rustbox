@@ -1,8 +1,5 @@
-#![feature(core)]
-
 extern crate rustbox;
 
-use std::error::Error;
 use std::default::Default;
 
 use rustbox::{Color, RustBox};
@@ -26,7 +23,7 @@ fn main() {
                     _ => { }
                 }
             },
-            Err(e) => panic!("{}", e.description()),
+            Err(e) => panic!("{:?}", e),
             _ => { }
         }
     }
