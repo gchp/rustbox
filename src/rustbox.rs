@@ -48,6 +48,10 @@ pub enum InputMode {
     /// When ESC sequence is in the buffer and it doesn't match any known
     /// sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
     Alt     = 0x02,
+    /// Same as `Esc` but enables mouse events
+    EscMouse = 0x05,
+    /// Same as `Alt` but enables mouse events
+    AltMouse = 0x06
 }
 
 #[derive(Clone, Copy, PartialEq)]
