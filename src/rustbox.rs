@@ -1,10 +1,10 @@
 #![feature(libc)]
-#![feature(std_misc)]
 #![feature(optin_builtin_traits)]
 
 extern crate gag;
 extern crate libc;
 extern crate num;
+extern crate time;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
@@ -14,13 +14,13 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 use std::char;
-use std::time::duration::Duration;
 use std::default::Default;
 
 use num::FromPrimitive;
 use termbox::RawEvent;
 use libc::c_int;
 use gag::Hold;
+use time::Duration;
 
 pub mod keyboard;
 pub mod mouse;
