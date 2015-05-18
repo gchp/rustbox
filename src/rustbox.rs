@@ -335,10 +335,10 @@ impl RustBox {
         unpack_event(rc, &ev, raw)
     }
 
-    pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult {
+    pub fn peek_event(&self, timeout_ms: i32, raw: bool) -> EventResult {
         let ev = NIL_RAW_EVENT;
         let rc = unsafe {
-            termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_int)
+            termbox::tb_peek_event(&ev as *const RawEvent, timeout_ms as c_int)
         };
         unpack_event(rc, &ev, raw)
     }
