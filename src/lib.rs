@@ -17,3 +17,7 @@ pub mod rustbox;
 #[cfg(all(target_os="macos"))]
 #[path="rustbox-c/mod.rs"]
 pub mod rustbox;
+
+#[cfg(all(target_os="windows"))]
+#[path="rustbox-pure/mod.rs"]
+pub mod rustbox;

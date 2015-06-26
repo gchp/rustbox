@@ -13,18 +13,14 @@ exclude = ["examples/*"]
 [lib]
 name = "rustbox"
 
-[features]
-default = ["termbox-sys", "gag"]
-
 [dependencies]
 bitflags = "0.2.1"
 num = "*"
 time = "*"
 
-[dependencies.termbox-sys]
-version = "0.2.7"
-optional = true
+[target.x86_64-unknown-linux-gnu.dependencies]
+termbox-sys = "0.2.7"
+gag = "0.1.6"
 
-[dependencies.gag]
-version = "0.1.6"
-optional = true
+[target.x86_64-pc-windows-gnu.dependencies]
+somethingfake = "0.1.1"
