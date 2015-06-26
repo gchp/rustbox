@@ -1,33 +1,23 @@
-#![feature(libc)]
-#![feature(optin_builtin_traits)]
-
-extern crate gag;
-extern crate libc;
-extern crate num;
-extern crate time;
 extern crate termbox_sys as termbox;
-#[macro_use] extern crate bitflags;
-
-pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
-
-use std::error::Error;
-use std::fmt;
-use std::io;
-use std::char;
-use std::default::Default;
-
-use num::FromPrimitive;
-use termbox::RawEvent;
-use libc::c_int;
-use gag::Hold;
-use time::Duration;
+extern crate gag;
 
 pub mod keyboard;
 pub mod mouse;
 
+pub use self::keyboard::Key;
+pub use self::mouse::Mouse;
 pub use self::running::running;
-pub use keyboard::Key;
-pub use mouse::Mouse;
+pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
+
+use self::termbox::RawEvent;
+use self::gag::Hold;
+
+use std::default::Default;
+use std::error::Error;
+use std::{fmt, io, char};
+use num::FromPrimitive;
+use libc::c_int;
+use time::Duration;
 
 #[derive(Clone, Copy)]
 pub enum Event {
