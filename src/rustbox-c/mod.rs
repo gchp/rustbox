@@ -1,33 +1,23 @@
-#![feature(libc)]
-#![feature(optin_builtin_traits)]
-
-extern crate gag;
-extern crate libc;
-extern crate num;
-extern crate time;
 extern crate termbox_sys as termbox;
-#[macro_use] extern crate bitflags;
-
-pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
-
-use std::error::Error;
-use std::fmt;
-use std::io;
-use std::char;
-use std::default::Default;
-
-use num::FromPrimitive;
-use termbox::RawEvent;
-use libc::c_int;
-use gag::Hold;
-use time::Duration;
 
 pub mod keyboard;
 pub mod mouse;
 
+pub use self::keyboard::Key;
+pub use self::mouse::Mouse;
 pub use self::running::running;
-pub use keyboard::Key;
-pub use mouse::Mouse;
+pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
+
+use self::termbox::RawEvent;
+
+use std::default::Default;
+use std::error::Error;
+use std::{fmt, io, char};
+
+use num::FromPrimitive;
+use libc::c_int;
+use gag::Hold;
+use time::Duration;
 
 #[derive(Clone, Copy)]
 pub enum Event {
@@ -356,8 +346,17 @@ impl RustBox {
         unsafe { termbox::tb_set_cursor(x as c_int, y as c_int) }
     }
 
-    pub unsafe fn change_cell(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
+    unsafe fn change_cell_internal(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
         termbox::tb_change_cell(x as c_int, y as c_int, ch, fg, bg)
+    }
+
+    pub fn change_cell(&self, x:usize, y:usize, ch:char, fg:Color, bg:Color, sty:Style)
+    {
+        let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
+        let bg = Style::from_color(bg);
+        unsafe {
+            self.change_cell_internal(x, y, ch as u32, fg.bits(), bg.bits());
+        }
     }
 
     pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
@@ -365,7 +364,7 @@ impl RustBox {
         let bg = Style::from_color(bg);
         for (i, ch) in s.chars().enumerate() {
             unsafe {
-                self.change_cell(x+i, y, ch as u32, fg.bits(), bg.bits());
+                self.change_cell_internal(x+i, y, ch as u32, fg.bits(), bg.bits());
             }
         }
     }
@@ -374,7 +373,7 @@ impl RustBox {
         let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         unsafe {
-            self.change_cell(x, y, ch as u32, fg.bits(), bg.bits());
+            self.change_cell_internal(x, y, ch as u32, fg.bits(), bg.bits());
         }
     }
 
