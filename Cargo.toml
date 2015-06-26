@@ -18,9 +18,18 @@ bitflags = "0.2.1"
 num = "*"
 time = "*"
 
+[target.i686-unknown-linux-gnu.dependencies]
+termbox-sys = "0.2.7"
+gag = "0.1.6"
+
 [target.x86_64-unknown-linux-gnu.dependencies]
 termbox-sys = "0.2.7"
 gag = "0.1.6"
 
+[target.i686-pc-windows-gnu.dependencies]
+winapi = "*"
+kernel32-sys = "*"
+
 [target.x86_64-pc-windows-gnu.dependencies]
-somethingfake = "0.1.1"
+winapi = "*"
+kernel32-sys = "*"
