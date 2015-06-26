@@ -2,26 +2,29 @@
 name = "rustbox"
 version = "0.6.2"
 authors = ["Greg Chapple <gregchapple1@gmail.com>"]
-description = "A rust implementation of the termbox library"
+description = "A Rust implementation of the Termbox library."
 repository = "https://github.com/gchp/rustbox"
 homepage = "https://github.com/gchp/rustbox"
 readme = "README.md"
 license = "MIT"
-keywords = [
-    "termbox",
-    "terminal",
-    "gui",
-]
-exclude = [
-    "examples/*"
-]
+keywords = ["termbox", "terminal", "gui",]
+exclude = ["examples/*"]
 
 [lib]
 name = "rustbox"
 
+[features]
+default = ["termbox-sys", "gag"]
+
 [dependencies]
 bitflags = "0.2.1"
-termbox-sys = "0.2.7"
-gag = "0.1.6"
 num = "*"
 time = "*"
+
+[dependencies.termbox-sys]
+version = "0.2.7"
+optional = true
+
+[dependencies.gag]
+version = "0.1.6"
+optional = true

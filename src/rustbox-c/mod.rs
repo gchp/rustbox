@@ -1,4 +1,5 @@
 extern crate termbox_sys as termbox;
+extern crate gag;
 
 pub mod keyboard;
 pub mod mouse;
@@ -9,14 +10,13 @@ pub use self::running::running;
 pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
 use self::termbox::RawEvent;
+use self::gag::Hold;
 
 use std::default::Default;
 use std::error::Error;
 use std::{fmt, io, char};
-
 use num::FromPrimitive;
 use libc::c_int;
-use gag::Hold;
 use time::Duration;
 
 #[derive(Clone, Copy)]
