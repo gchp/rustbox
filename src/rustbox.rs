@@ -377,17 +377,17 @@ impl RustBox {
     }
 
     pub fn poll_event(&self, raw: bool) -> EventResult {
-        let ev = NIL_RAW_EVENT;
+        let mut ev = NIL_RAW_EVENT;
         let rc = unsafe {
-            termbox::tb_poll_event(&ev as *const RawEvent)
+            termbox::tb_poll_event(&mut ev)
         };
         unpack_event(rc, &ev, raw)
     }
 
     pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult {
-        let ev = NIL_RAW_EVENT;
+        let mut ev = NIL_RAW_EVENT;
         let rc = unsafe {
-            termbox::tb_peek_event(&ev as *const RawEvent, timeout.num_milliseconds() as c_int)
+            termbox::tb_peek_event(&mut ev, timeout.num_milliseconds() as c_int)
         };
         unpack_event(rc, &ev, raw)
     }
