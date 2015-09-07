@@ -27,7 +27,7 @@ pub use self::running::running;
 pub use keyboard::Key;
 pub use mouse::Mouse;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Event {
     KeyEventRaw(u8, u16, u32),
     KeyEvent(Option<Key>),
