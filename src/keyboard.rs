@@ -1,26 +1,44 @@
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+/// This enumeration represents the different keys on the keyboard. There are separate names for each special key, and for plain chars and modifiers, there are tuple names.
 pub enum Key {
+    /// Tab key
     Tab,
+    /// Return or enter key
     Enter,
+    /// Escape key
     Esc,
+    /// Backspace key
     Backspace,
+    /// Right arrow
     Right,
+    /// Left arrow
     Left,
+    /// Up arrow
     Up,
+    /// Down arrow
     Down,
+    /// Delete key (this is the Mac equivilant of the backspace key)
     Delete,
 
+    /// Home key
     Home,
+    /// End key
     End,
+    /// Page Up key
     PageUp,
+    /// Page Down key
     PageDown,
 
+    /// Specific character on keyboard, representable by single Rust char
     Char(char),
+    /// Character on the keyboard, pressed simultaniusly with the Control key
     Ctrl(char),
+    /// A function key, specified by a `u32`
     F(u32),
 }
 
 impl Key {
+    /// Converts a char code to an optional `Key`
     pub fn from_code(code: u16) -> Option<Key> {
         match code {
             1 => Some(Key::Ctrl('a')),
