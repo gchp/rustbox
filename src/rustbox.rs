@@ -30,7 +30,7 @@ pub use mouse::Mouse;
 #[derive(Clone, Copy, Debug)]
 pub enum Event {
     KeyEventRaw(u8, u16, u32),
-    KeyEvent(Option<Key>),
+    KeyEvent(Key),
     ResizeEvent(i32, i32),
     MouseEvent(Mouse, i32, i32),
     NoEvent
@@ -145,7 +145,12 @@ fn unpack_event(ev_type: c_int, ev: &RawEvent, raw: bool) -> EventResult {
                     0 => char::from_u32(ev.ch).map(|c| Key::Char(c)),
                     a => Key::from_code(a),
                 };
-                Event::KeyEvent(k)
+                if let Some(key) = k {
+                    Event::KeyEvent(key)
+                }
+                else {
+                    Event::KeyEvent(Key::Unknown(ev.key))
+                }
             }),
         2 => Ok(Event::ResizeEvent(ev.w, ev.h)),
         3 => {
