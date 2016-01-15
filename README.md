@@ -52,7 +52,7 @@ fn main() {
         match rustbox.poll_event(false) {
             Ok(rustbox::Event::KeyEvent(key)) => {
                 match key {
-                    Some(Key::Char('q')) => { break; }
+                    Key::Char('q') => { break; }
                     _ => { }
                 }
             },
