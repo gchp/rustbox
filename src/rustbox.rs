@@ -1,7 +1,6 @@
 extern crate gag;
 extern crate libc;
 extern crate num;
-extern crate time;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
@@ -18,7 +17,7 @@ use num::FromPrimitive;
 use termbox::RawEvent;
 use libc::c_int;
 use gag::Hold;
-use time::Duration;
+use std::time::Duration;
 
 pub mod keyboard;
 pub mod mouse;
@@ -387,7 +386,7 @@ impl RustBox {
     pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult {
         let mut ev = NIL_RAW_EVENT;
         let rc = unsafe {
-            termbox::tb_peek_event(&mut ev, timeout.num_milliseconds() as c_int)
+            termbox::tb_peek_event(&mut ev, (timeout.as_secs() * 1000 + timeout.subsec_nanos() as u64 / 1000000) as c_int)
         };
         unpack_event(rc, &ev, raw)
     }
