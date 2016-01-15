@@ -19,6 +19,7 @@ pub enum Key {
     Char(char),
     Ctrl(char),
     F(u32),
+    Unknown(u16),
 }
 
 impl Key {
