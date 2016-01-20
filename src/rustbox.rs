@@ -51,7 +51,7 @@ pub enum InputMode {
     AltMouse = 0x06
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 #[repr(C,u16)]
 pub enum Color {
     Default =  0x00,
