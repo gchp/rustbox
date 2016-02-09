@@ -51,18 +51,59 @@ pub enum InputMode {
     AltMouse = 0x06
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum OutputMode {
+    Current = 0,
+    Normal = 1,
+    EightBit = 2,  // 256 Colors
+    WebSafe = 3,   // 216 Colors
+    Grayscale = 4,
+}
+
+
 #[derive(Clone, Copy, PartialEq, Debug)]
-#[repr(C,u16)]
 pub enum Color {
-    Default =  0x00,
-    Black =    0x01,
-    Red =      0x02,
-    Green =    0x03,
-    Yellow =   0x04,
-    Blue =     0x05,
-    Magenta =  0x06,
-    Cyan =     0x07,
-    White =    0x08,
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White,
+    Byte(u16),
+    Default,
+}
+impl Color {
+    pub fn as_256color(&self) -> u16 {
+        match *self {
+            Color::Black => 0x00,
+            Color::Red => 0x01,
+            Color::Green => 0x02,
+            Color::Yellow => 0x03,
+            Color::Blue => 0x04,
+            Color::Magenta => 0x05,
+            Color::Cyan => 0x06,
+            Color::White => 0x07,
+            Color::Byte(b) => b,
+            Color::Default => panic!("Attempted to cast default color to byte"),
+        }
+    }
+
+    pub fn as_16color(&self) -> u16 {
+        match *self {
+            Color::Default => 0x00,
+            Color::Black => 0x01,
+            Color::Red => 0x02,
+            Color::Green => 0x03,
+            Color::Yellow => 0x04,
+            Color::Blue => 0x05,
+            Color::Magenta => 0x06,
+            Color::Cyan => 0x07,
+            Color::White => 0x08,
+            Color::Byte(b) => panic!("Attempted to cast color byte {} to 16 color mode", b),
+        }
+    }
 }
 
 mod style {
@@ -80,7 +121,11 @@ mod style {
 
     impl Style {
         pub fn from_color(color: super::Color) -> Style {
-            Style { bits: color as u16 & TB_NORMAL_COLOR.bits }
+            Style { bits: color.as_16color() & TB_NORMAL_COLOR.bits }
+        }
+
+        pub fn from_256color(color: super::Color) -> Style {
+            Style { bits: color.as_256color() }
         }
     }
 }
@@ -223,6 +268,9 @@ pub struct RustBox {
     _running: running::RunningGuard,
     // Termbox is not thread safe. See #39.
     _phantom: PhantomData<*mut ()>,
+
+    // Store this so we know which colours to use
+    output_mode: OutputMode,
 }
 
 #[derive(Clone, Copy,Debug)]
@@ -231,6 +279,11 @@ pub struct InitOptions {
     ///
     /// See InputMode enum for details on the variants.
     pub input_mode: InputMode,
+
+    /// Use this option to initialize with a specific output mode
+    ///
+    /// See OutputMode enum for details on the variants.
+    pub output_mode: OutputMode,
 
     /// Use this option to automatically buffer stderr while RustBox is running.  It will be
     /// written when RustBox exits.
@@ -246,6 +299,7 @@ impl Default for InitOptions {
     fn default() -> Self {
         InitOptions {
             input_mode: InputMode::Current,
+            output_mode: OutputMode::Current,
             buffer_stderr: false,
         }
     }
@@ -321,11 +375,12 @@ impl RustBox {
         };
 
         // Create the RustBox.
-        let rb = unsafe { match termbox::tb_init() {
+        let mut rb = unsafe { match termbox::tb_init() {
             0 => RustBox {
                 _stderr: stderr,
                 _running: running,
                 _phantom: PhantomData,
+                output_mode: OutputMode::Current,
             },
             res => {
                 return Err(FromPrimitive::from_isize(res as isize).unwrap())
@@ -335,6 +390,11 @@ impl RustBox {
             InputMode::Current => (),
             _ => rb.set_input_mode(opts.input_mode),
         }
+        match opts.output_mode {
+            OutputMode::Current => (),
+            _ => rb.set_output_mode(opts.output_mode),
+        }
+
         Ok(rb)
     }
 
@@ -363,11 +423,26 @@ impl RustBox {
     }
 
     pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
-        let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
-        let bg = Style::from_color(bg);
+        let fg_int;
+        let bg_int;
+
+        match self.output_mode {
+            // 256 color mode
+            OutputMode::EightBit => {
+                fg_int = Style::from_256color(fg) | (sty & style::TB_ATTRIB);
+                bg_int = Style::from_256color(bg);
+            },
+
+            // 16 color mode
+            _ => {
+                fg_int = Style::from_color(fg) | (sty & style::TB_ATTRIB);
+                bg_int = Style::from_color(bg);
+            }
+        }
+
         for (i, ch) in s.chars().enumerate() {
             unsafe {
-                self.change_cell(x+i, y, ch as u32, fg.bits(), bg.bits());
+                self.change_cell(x+i, y, ch as u32, fg_int.bits(), bg_int.bits());
             }
         }
     }
@@ -401,6 +476,15 @@ impl RustBox {
             termbox::tb_select_input_mode(mode as c_int);
         }
     }
+
+    pub fn set_output_mode(&mut self, mode: OutputMode) {
+        self.output_mode = mode;
+
+        unsafe {
+            termbox::tb_select_output_mode(mode as c_int);
+        }
+    }
+
 }
 
 impl Drop for RustBox {
