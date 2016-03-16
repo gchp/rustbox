@@ -357,21 +357,21 @@ impl RustBox {
         unsafe { termbox::tb_set_cursor(x as c_int, y as c_int) }
     }
 
-    pub unsafe fn change_cell(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
+    pub unsafe fn change_cell(&self, x: isize, y: isize, ch: u32, fg: u16, bg: u16) {
         termbox::tb_change_cell(x as c_int, y as c_int, ch, fg, bg)
     }
 
-    pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
+    pub fn print(&self, x: isize, y: isize, sty: Style, fg: Color, bg: Color, s: &str) {
         let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         for (i, ch) in s.chars().enumerate() {
             unsafe {
-                self.change_cell(x+i, y, ch as u32, fg.bits(), bg.bits());
+                self.change_cell(x+(i as isize), y, ch as u32, fg.bits(), bg.bits());
             }
         }
     }
 
-    pub fn print_char(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, ch: char) {
+    pub fn print_char(&self, x: isize, y: isize, sty: Style, fg: Color, bg: Color, ch: char) {
         let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
         let bg = Style::from_color(bg);
         unsafe {
