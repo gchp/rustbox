@@ -5,6 +5,7 @@ extern crate termbox_sys as termbox;
 
 pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
+use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt;
 use std::io;
@@ -221,7 +222,7 @@ pub struct RustBox {
     // top-down order. Otherwise it will not properly protect the above fields.
     _running: running::RunningGuard,
     // Termbox is not thread safe. See #39.
-    _phantom: PhantomData<*mut ()>,
+    _phantom: PhantomData<UnsafeCell<()>>,
 }
 
 #[derive(Clone, Copy,Debug)]
