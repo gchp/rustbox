@@ -64,3 +64,9 @@ fn main() {
 ```
 
 **NOTE:** this example can also be run with `cargo run --example hello-world`.
+
+### Projects that use this crate:
+
+* [hostblock](https://github.com/cgag/hostblock)
+* [rust-2048](https://github.com/kdar/rust-2048)
+* [marching-squares](https://github.com/crespyl/marching-squares)
