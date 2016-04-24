@@ -10,7 +10,6 @@ use std::fmt;
 use std::io;
 use std::char;
 use std::default::Default;
-use std::marker::PhantomData;
 
 use num::FromPrimitive;
 use termbox::RawEvent;
@@ -220,8 +219,6 @@ pub struct RustBox {
     // Note that running *MUST* be the last field in the destructor, since destructors run in
     // top-down order. Otherwise it will not properly protect the above fields.
     _running: running::RunningGuard,
-    // Termbox is not thread safe. See #39.
-    _phantom: PhantomData<*mut ()>,
 }
 
 #[derive(Clone, Copy,Debug)]
@@ -324,7 +321,6 @@ impl RustBox {
             0 => RustBox {
                 _stderr: stderr,
                 _running: running,
-                _phantom: PhantomData,
             },
             res => {
                 return Err(FromPrimitive::from_isize(res as isize).unwrap())
