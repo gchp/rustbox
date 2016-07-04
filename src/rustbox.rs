@@ -51,7 +51,7 @@ pub enum InputMode {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-#[repr(C,u16)]
+#[repr(u16)]
 pub enum Color {
     Default =  0x00,
     Black =    0x01,
