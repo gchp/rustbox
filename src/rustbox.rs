@@ -453,13 +453,13 @@ impl RustBox {
         match self.output_mode {
             // 256 color mode
             OutputMode::EightBit => {
-                fg_int = Style::from_256color(fg);
+                fg_int = Style::from_256color(fg) | (sty & style::TB_ATTRIB);
                 bg_int = Style::from_256color(bg);
             },
 
             // 16 color mode
             _ => {
-                fg_int = Style::from_color(fg);
+                fg_int = Style::from_color(fg) | (sty & style::TB_ATTRIB);
                 bg_int = Style::from_color(bg);
             }
         }
