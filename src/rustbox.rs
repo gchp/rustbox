@@ -447,10 +447,24 @@ impl RustBox {
     }
 
     pub fn print_char(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, ch: char) {
-        let fg = Style::from_color(fg) | (sty & style::TB_ATTRIB);
-        let bg = Style::from_color(bg);
+        let fg_int;
+        let bg_int;
+
+        match self.output_mode {
+            // 256 color mode
+            OutputMode::EightBit => {
+                fg_int = Style::from_256color(fg);
+                bg_int = Style::from_256color(bg);
+            },
+
+            // 16 color mode
+            _ => {
+                fg_int = Style::from_color(fg);
+                bg_int = Style::from_color(bg);
+            }
+        }
         unsafe {
-            self.change_cell(x, y, ch as u32, fg.bits(), bg.bits());
+            self.change_cell(x, y, ch as u32, fg_int.bits(), bg_int.bits());
         }
     }
 
