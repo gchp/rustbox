@@ -105,6 +105,12 @@ impl Color {
     }
 }
 
+impl Default for Color {
+    fn default() -> Color {
+        Color::Black
+    }
+}
+
 mod style {
     bitflags! {
         #[repr(C)]
