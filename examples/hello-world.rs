@@ -6,7 +6,7 @@ use rustbox::{Color, RustBox};
 use rustbox::Key;
 
 fn main() {
-    let rustbox = match RustBox::init(Default::default()) {
+    let mut rustbox = match RustBox::init(Default::default()) {
         Result::Ok(v) => v,
         Result::Err(e) => panic!("{}", e),
     };
