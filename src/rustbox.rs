@@ -10,7 +10,6 @@ use std::fmt;
 use std::io;
 use std::char;
 use std::default::Default;
-use std::marker::PhantomData;
 
 use num::FromPrimitive;
 use termbox::RawEvent;
@@ -271,8 +270,6 @@ pub struct RustBox {
     // Note that running *MUST* be the last field in the destructor, since destructors run in
     // top-down order. Otherwise it will not properly protect the above fields.
     _running: running::RunningGuard,
-    // Termbox is not thread safe. See #39.
-    _phantom: PhantomData<*mut ()>,
 
     // Store this so we know which colours to use
     output_mode: OutputMode,
@@ -384,7 +381,6 @@ impl RustBox {
             0 => RustBox {
                 _stderr: stderr,
                 _running: running,
-                _phantom: PhantomData,
                 output_mode: OutputMode::Current,
             },
             res => {
@@ -411,23 +407,23 @@ impl RustBox {
         unsafe { termbox::tb_height() as usize }
     }
 
-    pub fn clear(&self) {
+    pub fn clear(&mut self) {
         unsafe { termbox::tb_clear() }
     }
 
-    pub fn present(&self) {
+    pub fn present(&mut self) {
         unsafe { termbox::tb_present() }
     }
 
-    pub fn set_cursor(&self, x: isize, y: isize) {
+    pub fn set_cursor(&mut self, x: isize, y: isize) {
         unsafe { termbox::tb_set_cursor(x as c_int, y as c_int) }
     }
 
-    pub unsafe fn change_cell(&self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
+    pub unsafe fn change_cell(&mut self, x: usize, y: usize, ch: u32, fg: u16, bg: u16) {
         termbox::tb_change_cell(x as c_int, y as c_int, ch, fg, bg)
     }
 
-    pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
+    pub fn print(&mut self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
         let fg_int;
         let bg_int;
 
@@ -452,7 +448,7 @@ impl RustBox {
         }
     }
 
-    pub fn print_char(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, ch: char) {
+    pub fn print_char(&mut self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, ch: char) {
         let fg_int;
         let bg_int;
 
@@ -490,7 +486,7 @@ impl RustBox {
         unpack_event(rc, &ev, raw)
     }
 
-    pub fn set_input_mode(&self, mode: InputMode) {
+    pub fn set_input_mode(&mut self, mode: InputMode) {
         unsafe {
             termbox::tb_select_input_mode(mode as c_int);
         }
