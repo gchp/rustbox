@@ -114,13 +114,13 @@ impl Default for Color {
 mod style {
     bitflags! {
         #[repr(C)]
-        flags Style: u16 {
-            const TB_NORMAL_COLOR = 0x000F,
-            const RB_BOLD = 0x0100,
-            const RB_UNDERLINE = 0x0200,
-            const RB_REVERSE = 0x0400,
-            const RB_NORMAL = 0x0000,
-            const TB_ATTRIB = RB_BOLD.bits | RB_UNDERLINE.bits | RB_REVERSE.bits,
+        pub struct Style: u16 {
+            const TB_NORMAL_COLOR = 0x000F;
+            const RB_BOLD = 0x0100;
+            const RB_UNDERLINE = 0x0200;
+            const RB_REVERSE = 0x0400;
+            const RB_NORMAL = 0x0000;
+            const TB_ATTRIB = RB_BOLD.bits | RB_UNDERLINE.bits | RB_REVERSE.bits;
         }
     }
 
