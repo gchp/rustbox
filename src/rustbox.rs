@@ -1,5 +1,5 @@
 extern crate gag;
-extern crate num;
+extern crate num_traits;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
@@ -12,7 +12,7 @@ use std::char;
 use std::default::Default;
 use std::marker::PhantomData;
 
-use num::FromPrimitive;
+use num_traits::FromPrimitive;
 use termbox::RawEvent;
 use std::os::raw::c_int;
 use gag::Hold;
