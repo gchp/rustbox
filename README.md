@@ -28,8 +28,6 @@ git = "https://github.com/gchp/rustbox.git"
 Then, in your `src/example.rs`:
 
 ```rust
-#![feature(core)]
-
 extern crate rustbox;
 
 use std::error::Error;
