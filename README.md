@@ -8,6 +8,8 @@ The original implementation of this was inspired by [Aaron Pribadi](http://githu
 
 **NOTE** This is under development, and the APIs may change as I figure out more how Rust works and as the language itself changes
 
+[**Documentation**](https://docs.rs/rustbox/)
+
 
 ## Usage
 
