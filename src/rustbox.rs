@@ -5,13 +5,12 @@ extern crate termbox_sys as termbox;
 
 pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
 
-use std::cell::UnsafeCell;
 use std::error::Error;
 use std::fmt;
 use std::io;
 use std::char;
 use std::default::Default;
-use std::marker::PhantomData;
+use std::sync::Mutex;
 
 use num_traits::FromPrimitive;
 use termbox::RawEvent;
@@ -272,11 +271,23 @@ pub struct RustBox {
     // Note that running *MUST* be the last field in the destructor, since destructors run in
     // top-down order. Otherwise it will not properly protect the above fields.
     _running: running::RunningGuard,
-    // Termbox is not thread safe. See #39.
-    _phantom: PhantomData<UnsafeCell<()>>,
 
     // Store this so we know which colours to use
     output_mode: OutputMode,
+
+    // Used/obtained by methods that read from the terminal (or termbox's
+    // internal state). Termbox is only thread safe to the extent that one
+    // thread can read while another writes; this lock prevents overlapping
+    // reads.
+    // See https://github.com/nsf/termbox/commit/493dc1395c91174e97658ff15fa2380227faf28f
+    input_lock: Mutex<()>,
+
+    // Used/obtained by methods that write to the terminal (or termbox's
+    // internal state). Termbox is only thread safe to the extent that one
+    // thread can read while another writes; this lock prevents overlapping
+    // writes.
+    // See https://github.com/nsf/termbox/commit/493dc1395c91174e97658ff15fa2380227faf28f
+    output_lock: Mutex<()>,
 }
 
 #[derive(Clone, Copy,Debug)]
@@ -385,8 +396,9 @@ impl RustBox {
             0 => RustBox {
                 _stderr: stderr,
                 _running: running,
-                _phantom: PhantomData,
                 output_mode: OutputMode::Current,
+                input_lock: Mutex::new(()),
+                output_lock: Mutex::new(()),
             },
             res => {
                 return Err(FromPrimitive::from_isize(res as isize).unwrap())
@@ -405,22 +417,32 @@ impl RustBox {
     }
 
     pub fn width(&self) -> usize {
+        let _lock = self.output_lock.lock();
+
         unsafe { termbox::tb_width() as usize }
     }
 
     pub fn height(&self) -> usize {
+        let _lock = self.output_lock.lock();
+
         unsafe { termbox::tb_height() as usize }
     }
 
     pub fn clear(&self) {
+        let _lock = self.output_lock.lock();
+
         unsafe { termbox::tb_clear() }
     }
 
     pub fn present(&self) {
+        let _lock = self.output_lock.lock();
+
         unsafe { termbox::tb_present() }
     }
 
     pub fn set_cursor(&self, x: isize, y: isize) {
+        let _lock = self.output_lock.lock();
+
         unsafe { termbox::tb_set_cursor(x as c_int, y as c_int) }
     }
 
@@ -429,6 +451,8 @@ impl RustBox {
     }
 
     pub fn print(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, s: &str) {
+        let _lock = self.output_lock.lock();
+
         let fg_int;
         let bg_int;
 
@@ -454,6 +478,8 @@ impl RustBox {
     }
 
     pub fn print_char(&self, x: usize, y: usize, sty: Style, fg: Color, bg: Color, ch: char) {
+        let _lock = self.output_lock.lock();
+
         let fg_int;
         let bg_int;
 
@@ -476,6 +502,7 @@ impl RustBox {
     }
 
     pub fn poll_event(&self, raw: bool) -> EventResult {
+        let _lock = self.input_lock.lock();
         let mut ev = NIL_RAW_EVENT;
         let rc = unsafe {
             termbox::tb_poll_event(&mut ev)
@@ -484,6 +511,7 @@ impl RustBox {
     }
 
     pub fn peek_event(&self, timeout: Duration, raw: bool) -> EventResult {
+        let _lock = self.input_lock.lock();
         let mut ev = NIL_RAW_EVENT;
         let rc = unsafe {
             termbox::tb_peek_event(&mut ev, (timeout.as_secs() * 1000 + timeout.subsec_nanos() as u64 / 1000000) as c_int)
@@ -492,12 +520,16 @@ impl RustBox {
     }
 
     pub fn set_input_mode(&self, mode: InputMode) {
+        let _lock = self.output_lock.lock();
+
         unsafe {
             termbox::tb_select_input_mode(mode as c_int);
         }
     }
 
     pub fn set_output_mode(&mut self, mode: OutputMode) {
+        let _lock = self.output_lock.lock();
+
         self.output_mode = mode;
 
         unsafe {
