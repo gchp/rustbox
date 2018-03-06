@@ -10,6 +10,7 @@ use std::fmt;
 use std::io;
 use std::char;
 use std::default::Default;
+use std::ops::FnOnce;
 use std::sync::Mutex;
 
 use num_traits::FromPrimitive;
@@ -537,6 +538,27 @@ impl RustBox {
         }
     }
 
+    /// Convenience method to lock all (both input/output) access to
+    /// Rustbox, shutdown termbox itself, and then defer to the caller (via F,
+    /// while access is still locked). Once F completes, termbox is started and
+    /// the locks are released.
+    pub fn suspend<F>(&self, func: F)
+        where F: FnOnce() -> ()
+    {
+        // Lock I/O until we've resumed.
+        let _input_lock = self.input_lock.lock();
+        let _output_lock = self.output_lock.lock();
+
+        unsafe {
+            termbox::tb_shutdown();
+        }
+
+        func();
+
+        unsafe {
+            termbox::tb_init();
+        }
+    }
 }
 
 impl Drop for RustBox {
