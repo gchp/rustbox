@@ -20,7 +20,7 @@ exclude = [
 name = "rustbox"
 
 [dependencies]
-bitflags = "0.2.1"
+bitflags = "1"
 termbox-sys = "0.2.9"
 gag = "0.1.6"
 num-traits = "0.1.13"

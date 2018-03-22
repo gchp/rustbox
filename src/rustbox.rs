@@ -3,8 +3,6 @@ extern crate num_traits;
 extern crate termbox_sys as termbox;
 #[macro_use] extern crate bitflags;
 
-pub use self::style::{Style, RB_BOLD, RB_UNDERLINE, RB_REVERSE, RB_NORMAL};
-
 use std::error::Error;
 use std::fmt;
 use std::io;
@@ -112,27 +110,25 @@ impl Default for Color {
     }
 }
 
-mod style {
-    bitflags! {
-        #[repr(C)]
-        flags Style: u16 {
-            const TB_NORMAL_COLOR = 0x000F,
-            const RB_BOLD = 0x0100,
-            const RB_UNDERLINE = 0x0200,
-            const RB_REVERSE = 0x0400,
-            const RB_NORMAL = 0x0000,
-            const TB_ATTRIB = RB_BOLD.bits | RB_UNDERLINE.bits | RB_REVERSE.bits,
-        }
+bitflags! {
+    #[repr(C)]
+    pub struct Style: u16 {
+        const TB_NORMAL_COLOR = 0x000F;
+        const RB_BOLD = 0x0100;
+        const RB_UNDERLINE = 0x0200;
+        const RB_REVERSE = 0x0400;
+        const RB_NORMAL = 0x0000;
+        const TB_ATTRIB = Style::RB_BOLD.bits | Style::RB_UNDERLINE.bits | Style::RB_REVERSE.bits;
+    }
+}
+
+impl Style {
+    pub fn from_color(color: Color) -> Style {
+        Style { bits: color.as_16color() & Style::TB_NORMAL_COLOR.bits }
     }
 
-    impl Style {
-        pub fn from_color(color: super::Color) -> Style {
-            Style { bits: color.as_16color() & TB_NORMAL_COLOR.bits }
-        }
-
-        pub fn from_256color(color: super::Color) -> Style {
-            Style { bits: color.as_256color() }
-        }
+    pub fn from_256color(color: Color) -> Style {
+        Style { bits: color.as_256color() }
     }
 }
 
@@ -460,13 +456,13 @@ impl RustBox {
         match self.output_mode {
             // 256 color mode
             OutputMode::EightBit => {
-                fg_int = Style::from_256color(fg) | (sty & style::TB_ATTRIB);
+                fg_int = Style::from_256color(fg) | (sty & Style::TB_ATTRIB);
                 bg_int = Style::from_256color(bg);
             },
 
             // 16 color mode
             _ => {
-                fg_int = Style::from_color(fg) | (sty & style::TB_ATTRIB);
+                fg_int = Style::from_color(fg) | (sty & Style::TB_ATTRIB);
                 bg_int = Style::from_color(bg);
             }
         }
@@ -487,13 +483,13 @@ impl RustBox {
         match self.output_mode {
             // 256 color mode
             OutputMode::EightBit => {
-                fg_int = Style::from_256color(fg) | (sty & style::TB_ATTRIB);
+                fg_int = Style::from_256color(fg) | (sty & Style::TB_ATTRIB);
                 bg_int = Style::from_256color(bg);
             },
 
             // 16 color mode
             _ => {
-                fg_int = Style::from_color(fg) | (sty & style::TB_ATTRIB);
+                fg_int = Style::from_color(fg) | (sty & Style::TB_ATTRIB);
                 bg_int = Style::from_color(bg);
             }
         }

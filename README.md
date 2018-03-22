@@ -35,7 +35,7 @@ extern crate rustbox;
 use std::error::Error;
 use std::default::Default;
 
-use rustbox::{Color, RustBox};
+use rustbox::{Color, RustBox, Style};
 use rustbox::Key;
 
 fn main() {
@@ -44,8 +44,8 @@ fn main() {
         Result::Err(e) => panic!("{}", e),
     };
 
-    rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!");
-    rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black,
+    rustbox.print(1, 1, Style::RB_BOLD, Color::White, Color::Black, "Hello, world!");
+    rustbox.print(1, 3, Style::RB_BOLD, Color::White, Color::Black,
                   "Press 'q' to quit.");
     rustbox.present();
     loop {
