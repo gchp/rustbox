@@ -2,7 +2,7 @@ extern crate rustbox;
 
 use std::default::Default;
 
-use rustbox::{Color, RustBox, OutputMode};
+use rustbox::{Color, RustBox, OutputMode, Style};
 use rustbox::Key;
 
 fn main() {
@@ -12,8 +12,8 @@ fn main() {
     };
     rustbox.set_output_mode(OutputMode::EightBit);
 
-    rustbox.print(1, 1, rustbox::RB_BOLD, Color::Byte(0xa2), Color::Black, "Hello, world!");
-    rustbox.print(1, 3, rustbox::RB_NORMAL, Color::Black, Color::Byte(0x9a), "Press 'q' to quit.");
+    rustbox.print(1, 1, Style::RB_BOLD, Color::Byte(0xa2), Color::Black, "Hello, world!");
+    rustbox.print(1, 3, Style::RB_NORMAL, Color::Black, Color::Byte(0x9a), "Press 'q' to quit.");
     loop {
         rustbox.present();
         match rustbox.poll_event(false) {
