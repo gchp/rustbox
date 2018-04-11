@@ -35,7 +35,7 @@ pub enum Event {
     NoEvent
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum InputMode {
     Current = 0x00,
 
