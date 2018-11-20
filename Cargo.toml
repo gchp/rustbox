@@ -1,0 +1,7 @@
+[package]
+name = "rustbox"
+version = "0.1.0"
+authors = ["Greg Chapple <gregchapple1@gmail.com>"]
+
+[dependencies]
+libc = "*"
