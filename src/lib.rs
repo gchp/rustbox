@@ -22,11 +22,25 @@ macro_rules! build_term_code {
 }
 
 mod termcodes {
-    build_term_code!(EnterCa, "?1049h");
-    build_term_code!(ExitCa, "?1049l");
-    build_term_code!(ClearScreen, "2J");
+    build_term_code!(EnterCa, "?1049h\x1b[22;0;0t");
+    build_term_code!(ExitCa, "?1049l\x1b[23;0;0t");
+    build_term_code!(ClearScreen, "H\x1b[2J");
     build_term_code!(HideCursor, "?25l");
     build_term_code!(ShowCursor, "?25h");
+    build_term_code!(Reset, "m\x0f");
+
+    pub struct EnterKeypad;
+    impl std::fmt::Display for EnterKeypad {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "\x1B=")
+        }
+    }
+    pub struct ExitKeypad;
+    impl std::fmt::Display for ExitKeypad {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "\x1B>")
+        }
+    }
 }
 
 
@@ -107,16 +121,19 @@ impl RustBox {
         ios.c_cc[libc::VMIN] = 0;
         ios.c_cc[libc::VTIME] = 0;
 
-        set_terminal_attr(&ios);
-
         let mut outf = OpenOptions::new().read(true).write(true).open("/dev/tty").unwrap();
-
         // TODO(gchp): find out what this is about. See termbox tb_init.
         unsafe { libc::tcsetattr(outf.as_raw_fd(), libc::TCSAFLUSH, &ios); }
 
+        set_terminal_attr(&ios);
+
+
         write!(outf, "{}", termcodes::EnterCa);
+        write!(outf, "{}", termcodes::EnterKeypad);
         write!(outf, "{}", termcodes::HideCursor);
+        write!(outf, "{}", termcodes::Reset);
         write!(outf, "{}", termcodes::ClearScreen);
+
 
         let win_size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0};
         unsafe { libc::ioctl(outf.as_raw_fd(), libc::TIOCGWINSZ, &win_size); }
@@ -153,16 +170,15 @@ impl RustBox {
     pub fn present(&mut self) {
         self.front_buffer = self.back_buffer.clone();
 
-        // just try render the first cell
-        let cell = &self.front_buffer[0][0];
-        // assume 256 colors
-        let fg = cell.fg.as_256_color() & 0xFF;
-        let bg = cell.bg.as_256_color() & 0xFF;
+        for (row, i) in self.front_buffer.iter().enumerate() {
+            for cell in &self.front_buffer[row] {
+                // TODO(gchp): this currently assumes 256 colors
+                let fg = cell.fg.as_256_color() & 0xFF;
+                let bg = cell.bg.as_256_color() & 0xFF;
 
-        let red = "\x1B[38;5;1m";
-        write!(&self.outf, "{}{}", red, cell.ch);
-        write!(&self.outf, "\x1B[m");
-        write!(&self.outf, "{}", cell.ch);
+                write!(&self.outf, "{}", cell.ch);
+            }
+        }
     }
 }
 
@@ -172,6 +188,7 @@ impl Drop for RustBox {
         write!(self.outf, "{}", termcodes::ShowCursor);
         write!(self.outf, "{}", termcodes::ClearScreen);
         write!(self.outf, "{}", termcodes::ExitCa);
+        write!(self.outf, "{}", termcodes::ExitKeypad);
 
         set_terminal_attr(&self.orig_ios);
     }

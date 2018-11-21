@@ -11,6 +11,7 @@ use rustbox::{Style, Color};
 fn main() {
     let mut rustbox = RustBox::new();
     rustbox.print_char(0, 0, Style::Normal, Color::White, Color::Black, 'y');
+    rustbox.print_char(1, 1, Style::Normal, Color::White, Color::Black, 'y');
     rustbox.present();
 
     sleep(Duration::new(2, 0));
