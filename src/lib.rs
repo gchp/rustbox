@@ -2,8 +2,9 @@ extern crate libc;
 
 use std::mem;
 use std::fs::{OpenOptions, File};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
+use std::convert::From;
 
 use libc::termios;
 use libc::c_int;
@@ -44,6 +45,97 @@ mod termcodes {
 }
 
 
+#[derive(Debug, PartialEq)]
+pub enum Key {
+    Tab,
+    Enter,
+    Esc,
+    Backspace,
+    Right,
+    Left,
+    Up,
+    Down,
+    Delete,
+    Insert,
+
+    Home,
+    End,
+    PageUp,
+    PageDown,
+
+    Char(char),
+    Ctrl(char),
+    F(u32),
+    Unknown(u16),
+}
+impl Key {
+    pub fn from_code(code: u16) -> Option<Key> {
+        match code {
+            1 => Some(Key::Ctrl('a')),
+            2 => Some(Key::Ctrl('b')),
+            3 => Some(Key::Ctrl('c')),
+            4 => Some(Key::Ctrl('d')),
+            5 => Some(Key::Ctrl('e')),
+            6 => Some(Key::Ctrl('f')),
+            7 => Some(Key::Ctrl('g')),
+            8 => Some(Key::Ctrl('h')),
+            9 => Some(Key::Tab),
+            10 => Some(Key::Ctrl('j')),
+            11 => Some(Key::Ctrl('k')),
+            12 => Some(Key::Ctrl('l')),
+            13 => Some(Key::Enter),
+            14 => Some(Key::Ctrl('n')),
+            15 => Some(Key::Ctrl('o')),
+            16 => Some(Key::Ctrl('p')),
+            17 => Some(Key::Ctrl('q')),
+            18 => Some(Key::Ctrl('r')),
+            19 => Some(Key::Ctrl('s')),
+            20 => Some(Key::Ctrl('t')),
+            21 => Some(Key::Ctrl('u')),
+            22 => Some(Key::Ctrl('v')),
+            23 => Some(Key::Ctrl('w')),
+            24 => Some(Key::Ctrl('x')),
+            25 => Some(Key::Ctrl('y')),
+            26 => Some(Key::Ctrl('z')),
+            27 => Some(Key::Esc),
+            28 => Some(Key::Ctrl('\\')),
+            29 => Some(Key::Ctrl(']')),
+            30 => Some(Key::Ctrl('6')),
+            31 => Some(Key::Ctrl('/')),
+            32 => Some(Key::Char(' ')),
+            127 => Some(Key::Backspace),
+            65514 => Some(Key::Right),
+            65515 => Some(Key::Left),
+            65516 => Some(Key::Down),
+            65517 => Some(Key::Up),
+            65535 => Some(Key::F(1)),
+            65534 => Some(Key::F(2)),
+            65533 => Some(Key::F(3)),
+            65532 => Some(Key::F(4)),
+            65531 => Some(Key::F(5)),
+            65530 => Some(Key::F(6)),
+            65529 => Some(Key::F(7)),
+            65528 => Some(Key::F(8)),
+            65527 => Some(Key::F(9)),
+            65526 => Some(Key::F(10)),
+            65525 => Some(Key::F(11)),
+            65524 => Some(Key::F(12)),
+            65523 => Some(Key::Insert),
+            65522 => Some(Key::Delete),
+            65521 => Some(Key::Home),
+            65520 => Some(Key::End),
+            65519 => Some(Key::PageUp),
+            65518 => Some(Key::PageDown),
+            _     => None,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Event {
+    Key(Key),
+}
+
 /// Buffered file writing
 ///
 /// Mostly adapted from std::io::BufWriter
@@ -60,7 +152,7 @@ impl BufferedFile {
         }
     }
 
-    fn flush_inner(&mut self) -> std::io::Result<()> {
+    fn flush_buffer(&mut self) -> std::io::Result<()> {
         let mut written = 0;
         let len = self.buf.len();
         let mut ret = Ok(());
@@ -90,7 +182,7 @@ impl Write for BufferedFile {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        self.flush_inner().and_then(|()| self.inner.flush())
+        self.flush_buffer().and_then(|()| self.inner.flush())
     }
 }
 
@@ -160,7 +252,9 @@ pub struct Cell {
 pub struct RustBox {
     orig_ios: termios,
     outf: BufferedFile,
+    inf: File,
 
+    input_buffer: String,
 
     // TODO(gchp): do we need two buffers?
     front_buffer: Vec<Vec<Cell>>,
@@ -184,7 +278,8 @@ impl RustBox {
         ios.c_cc[libc::VMIN] = 0;
         ios.c_cc[libc::VTIME] = 0;
 
-        let outf = OpenOptions::new().read(true).write(true).open("/dev/tty").unwrap();
+        let outf = OpenOptions::new().write(true).open("/dev/tty").unwrap();
+        let inf = OpenOptions::new().read(true).open("/dev/tty").unwrap();
         // TODO(gchp): find out what this is about. See termbox tb_init.
         unsafe { libc::tcsetattr(outf.as_raw_fd(), libc::TCSAFLUSH, &ios); }
 
@@ -210,14 +305,18 @@ impl RustBox {
         for _i in 0..win_size.ws_row {
             let mut row = Vec::new();
             for _j in 0..win_size.ws_col {
-                row.push(Cell { ch: 'x', fg: Color::White, bg: Color::Black, style: Style::Normal })
+                row.push(Cell { ch: ' ', fg: Color::White, bg: Color::Black, style: Style::Normal })
             }
             back_buffer.push(row);
         }
 
         RustBox {
             orig_ios: orig_ios,
+
             outf: buffered_file,
+            inf: inf,
+
+            input_buffer: String::new(),
 
             front_buffer: back_buffer.clone(),
             back_buffer: back_buffer,
@@ -283,5 +382,105 @@ impl Drop for RustBox {
         write!(self.outf, "{}", termcodes::ExitKeypad);
 
         set_terminal_attr(&self.orig_ios);
+    }
+}
+
+
+struct InputBuffer<R> {
+    source: R,
+    leftover: Option<u8>,
+}
+
+impl <R: Read> InputBuffer<R> {
+    fn new(source: R) -> InputBuffer<R> {
+        InputBuffer {
+            source: source,
+            leftover: None,
+        }
+    }
+}
+
+impl <R: Read> std::iter::Iterator for InputBuffer<R> {
+    type Item = Result<Event, std::io::Error>;
+
+    fn next(&mut self) -> Option<Result<Event, std::io::Error>> {
+        let mut buf = [0u8; 2];
+        let mut source = &mut self.source;
+
+        if let Some(c) = self.leftover {
+            self.leftover = None;
+            return Some(parse_item(c, &mut source.bytes()));
+        }
+
+        let res = match source.read(&mut buf) {
+            Ok(0) => return None,
+            Ok(1) => parse_item(buf[0], &mut source.bytes()),
+            Ok(2) => {
+                let result = parse_item(buf[0], &mut source.bytes());
+                self.leftover = Some(buf[1]);
+                result
+            }
+            Ok(_) => unreachable!(),
+            Err(e) => Err(e),
+        };
+
+        Some(res)
+    }
+}
+
+fn parse_item<I>(c: u8, iter: &mut I) -> Result<Event, std::io::Error>
+    where I: Iterator<Item = Result<u8, std::io::Error>>
+{
+    match c {
+        b'\x1B' => Ok(Event::Key(Key::Esc)),
+        c if c.is_ascii_alphanumeric() => Ok(Event::Key(Key::Char(c as char))),
+        _ => { unimplemented!() }
+    }
+}
+
+
+
+#[cfg(test)]
+mod test {
+    use std::io::Cursor;
+    use super::*;
+
+    #[test]
+    fn test_input_buffer_esc_key() {
+        let source = Cursor::new(String::from("\x1B"));
+        let mut buffer = InputBuffer::new(source);
+
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Esc));
+        assert!(buffer.next().is_none());
+    }
+
+    #[test]
+    fn test_input_buffer_single_key() {
+        let source = Cursor::new(String::from("a"));
+        let mut buffer = InputBuffer::new(source);
+
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
+        assert!(buffer.next().is_none());
+    }
+
+    #[test]
+    fn test_input_buffer_double_key() {
+        let source = Cursor::new(String::from("ab"));
+        let mut buffer = InputBuffer::new(source);
+
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('b')));
+        assert!(buffer.next().is_none());
+    }
+
+    #[test]
+    fn test_input_buffer_triple_key() {
+        let source = Cursor::new(String::from("abc"));
+        let mut buffer = InputBuffer::new(source);
+
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('b')));
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('c')));
+        assert!(buffer.next().is_none());
     }
 }
