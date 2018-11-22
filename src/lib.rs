@@ -455,6 +455,16 @@ mod test {
     }
 
     #[test]
+    fn test_input_buffer_double_esc_key() {
+        let source = Cursor::new(String::from("\x1B\x1B"));
+        let mut buffer = InputBuffer::new(source);
+
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Esc));
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Esc));
+        assert!(buffer.next().is_none());
+    }
+
+    #[test]
     fn test_input_buffer_single_key() {
         let source = Cursor::new(String::from("a"));
         let mut buffer = InputBuffer::new(source);
@@ -481,6 +491,15 @@ mod test {
         assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
         assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('b')));
         assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('c')));
+        assert!(buffer.next().is_none());
+    }
+
+    #[test]
+    fn test_input_buffer_left_arrow_key() {
+        let source = Cursor::new(String::from("\x1B[D"));
+        let mut buffer = InputBuffer::new(source);
+
+        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Left));
         assert!(buffer.next().is_none());
     }
 }
