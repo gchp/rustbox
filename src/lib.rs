@@ -414,10 +414,19 @@ impl <R: Read> std::iter::Iterator for InputBuffer<R> {
 
         let res = match source.read(&mut buf) {
             Ok(0) => return None,
-            Ok(1) => parse_item(buf[0], &mut source.bytes()),
+            Ok(1) => {
+                match buf[0] {
+                    b'\x1b' => Ok(Event::Key(Key::Esc)),
+                    _ => parse_item(buf[0], &mut source.bytes()),
+                }
+            }
             Ok(2) => {
-                let result = parse_item(buf[0], &mut source.bytes());
-                self.leftover = Some(buf[1]);
+                let mut option_iter = &mut Some(buf[1]).into_iter();
+                let result = {
+                    let mut iter = option_iter.map(|c| Ok(c)).chain(source.bytes());
+                    parse_item(buf[0], &mut iter)
+                };
+                self.leftover = option_iter.next();
                 result
             }
             Ok(_) => unreachable!(),
@@ -432,7 +441,24 @@ fn parse_item<I>(c: u8, iter: &mut I) -> Result<Event, std::io::Error>
     where I: Iterator<Item = Result<u8, std::io::Error>>
 {
     match c {
-        b'\x1B' => Ok(Event::Key(Key::Esc)),
+        b'\x1B' => {
+            match iter.next() {
+                Some(Ok(b'[')) => {
+                    match iter.next() {
+                        Some(Ok(b'D')) => Ok(Event::Key(Key::Left)),
+                        Some(Ok(b'C')) => Ok(Event::Key(Key::Right)),
+                        Some(Ok(b'A')) => Ok(Event::Key(Key::Up)),
+                        Some(Ok(b'B')) => Ok(Event::Key(Key::Down)),
+                        Some(Ok(b'H')) => Ok(Event::Key(Key::Home)),
+                        Some(Ok(b'F')) => Ok(Event::Key(Key::End)),
+                        _ => unimplemented!(),
+                    }
+                }
+
+                c => unimplemented!("{:?}", c),
+            }
+
+        }
         c if c.is_ascii_alphanumeric() => Ok(Event::Key(Key::Char(c as char))),
         _ => { unimplemented!() }
     }
@@ -445,61 +471,37 @@ mod test {
     use std::io::Cursor;
     use super::*;
 
-    #[test]
-    fn test_input_buffer_esc_key() {
-        let source = Cursor::new(String::from("\x1B"));
-        let mut buffer = InputBuffer::new(source);
+    macro_rules! key_test {
+        ($name:ident, $input:expr, $($keys:expr),*) => {
+            #[test]
+            fn $name() {
+                let source = Cursor::new(String::from($input));
+                let mut buffer = InputBuffer::new(source);
 
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Esc));
-        assert!(buffer.next().is_none());
+                $(assert_eq!(buffer.next().unwrap().unwrap(), $keys);)*
+                assert!(buffer.next().is_none());
+            }
+        }
     }
 
-    #[test]
-    fn test_input_buffer_double_esc_key() {
-        let source = Cursor::new(String::from("\x1B\x1B"));
-        let mut buffer = InputBuffer::new(source);
+    key_test!(
+        test_input_double_key, "ab",
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('b'))
+    );
+    key_test!(
+        test_input_triple_key, "abc",
+        Event::Key(Key::Char('a')),
+        Event::Key(Key::Char('b')),
+        Event::Key(Key::Char('c'))
+    );
+    key_test!(test_input_left_arrow_key, "\x1B[D", Event::Key(Key::Left));
+    key_test!(test_input_right_arrow_key, "\x1B[C", Event::Key(Key::Right));
+    key_test!(test_input_up_arrow_key, "\x1B[A", Event::Key(Key::Up));
+    key_test!(test_input_down_arrow_key, "\x1B[B", Event::Key(Key::Down));
+    key_test!(test_input_home_key, "\x1B[H", Event::Key(Key::Home));
+    key_test!(test_input_end_arrow_key, "\x1B[F", Event::Key(Key::End));
+    key_test!(test_input_esc_key, "\x1B", Event::Key(Key::Esc));
+    key_test!(test_input_single_key, "a", Event::Key(Key::Char('a')));
 
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Esc));
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Esc));
-        assert!(buffer.next().is_none());
-    }
-
-    #[test]
-    fn test_input_buffer_single_key() {
-        let source = Cursor::new(String::from("a"));
-        let mut buffer = InputBuffer::new(source);
-
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
-        assert!(buffer.next().is_none());
-    }
-
-    #[test]
-    fn test_input_buffer_double_key() {
-        let source = Cursor::new(String::from("ab"));
-        let mut buffer = InputBuffer::new(source);
-
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('b')));
-        assert!(buffer.next().is_none());
-    }
-
-    #[test]
-    fn test_input_buffer_triple_key() {
-        let source = Cursor::new(String::from("abc"));
-        let mut buffer = InputBuffer::new(source);
-
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('a')));
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('b')));
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Char('c')));
-        assert!(buffer.next().is_none());
-    }
-
-    #[test]
-    fn test_input_buffer_left_arrow_key() {
-        let source = Cursor::new(String::from("\x1B[D"));
-        let mut buffer = InputBuffer::new(source);
-
-        assert_eq!(buffer.next().unwrap().unwrap(), Event::Key(Key::Left));
-        assert!(buffer.next().is_none());
-    }
 }
