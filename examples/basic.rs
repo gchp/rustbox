@@ -17,18 +17,18 @@ fn main() {
     rustbox.print_char(2, 1, Style::Normal, Color::Black, Color::Red, 'y');
     rustbox.present();
 
-    rustbox.poll_event();
+    // rustbox.poll_event();
 
-    // loop {
-    //     match rustbox.poll_event() {
-    //         Ok(Event::Key(Key::Esc)) => break,
-    //         Ok(Event::Key(Key::Char(c))) => {
-    //             rustbox.print_char(10, 10, Style::Normal, Color::White, Color::Black, c);
-    //             rustbox.present();
-    //         }
-    //         _ => break,
-    //     }
-    // }
+    loop {
+        match rustbox.poll_event() {
+            Ok(Event::Key(Key::Esc)) => break,
+            Ok(Event::Key(Key::Char(c))) => {
+                rustbox.print_char(10, 10, Style::Normal, Color::White, Color::Black, c);
+                rustbox.present();
+            }
+            _ => break,
+        }
+    }
 
     // sleep(Duration::new(2, 0));
 }

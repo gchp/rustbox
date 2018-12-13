@@ -1,8 +1,7 @@
 extern crate libc;
 
-use std::convert::From;
 use std::fs::{File, OpenOptions};
-use std::io::{BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::mem;
 use std::os::unix::io::AsRawFd;
 
@@ -197,6 +196,27 @@ impl Drop for BufferedFile {
     }
 }
 
+fn select(nfds: i32, read_fds: &[i32]) {
+    extern "C" {
+        pub fn select(
+            nfds: c_int,
+            readfds: *mut fd_set,
+            writefds: *mut fd_set,
+            errorfds: *mut fd_set,
+            timeout: *mut timeval,
+        ) -> c_int;
+    }
+    unsafe {
+        select(
+            nfds,
+            read_fds.as_ptr() as *mut fd_set,
+            std::ptr::null_mut() as *mut fd_set,
+            std::ptr::null_mut() as *mut fd_set,
+            0 as *mut timeval,
+        );
+    }
+}
+
 pub fn get_terminal_attr() -> termios {
     extern "C" {
         pub fn tcgetattr(fd: c_int, termptr: *const termios) -> c_int;
@@ -256,8 +276,6 @@ pub struct RustBox {
     leftover_input: Option<u8>,
     inf: File,
 
-    input_buffer: String,
-
     // TODO(gchp): do we need two buffers?
     front_buffer: Vec<Vec<Cell>>,
     back_buffer: Vec<Vec<Cell>>,
@@ -307,11 +325,11 @@ impl RustBox {
 
         set_terminal_attr(&ios);
 
-        write!(buffered_file, "{}", termcodes::EnterCa);
-        write!(buffered_file, "{}", termcodes::EnterKeypad);
-        write!(buffered_file, "{}", termcodes::HideCursor);
-        write!(buffered_file, "{}", termcodes::SGR0);
-        write!(buffered_file, "{}", termcodes::ClearScreen);
+        let _ = write!(buffered_file, "{}", termcodes::EnterCa);
+        let _ = write!(buffered_file, "{}", termcodes::EnterKeypad);
+        let _ = write!(buffered_file, "{}", termcodes::HideCursor);
+        let _ = write!(buffered_file, "{}", termcodes::SGR0);
+        let _ = write!(buffered_file, "{}", termcodes::ClearScreen);
 
         let _ = buffered_file.flush();
 
@@ -336,10 +354,10 @@ impl RustBox {
             inf: inf,
 
             leftover_input: None,
-            input_buffer: String::new(),
 
             front_buffer: back_buffer.clone(),
             back_buffer: back_buffer,
+
             width: win_size.ws_col,
             height: win_size.ws_row,
         }
@@ -361,21 +379,21 @@ impl RustBox {
         for (i, _row) in self.front_buffer.iter().enumerate() {
             for cell in &self.front_buffer[i] {
                 // reset
-                write!(self.outf, "{}", termcodes::SGR0);
+                let _ = write!(self.outf, "{}", termcodes::SGR0);
 
                 match cell.style {
                     Style::Normal => {}
                     Style::Underline => {
-                        write!(self.outf, "\x1b[4m");
+                        let _ = write!(self.outf, "\x1b[4m");
                     }
                     Style::Bold => {
-                        write!(self.outf, "\x1b[1m");
+                        let _ = write!(self.outf, "\x1b[1m");
                     }
                     Style::Blink => {
-                        write!(self.outf, "\x1b[5m");
+                        let _ = write!(self.outf, "\x1b[5m");
                     }
                     Style::Reverse => {
-                        write!(self.outf, "\x1b[7m");
+                        let _ = write!(self.outf, "\x1b[7m");
                     }
                 }
 
@@ -383,10 +401,10 @@ impl RustBox {
                 let fg = cell.fg.as_256_color() & 0xFF;
                 let bg = cell.bg.as_256_color() & 0xFF;
 
-                write!(self.outf, "\x1b[38;5;{}m", fg);
-                write!(self.outf, "\x1b[48;5;{}m", bg);
+                let _ = write!(self.outf, "\x1b[38;5;{}m", fg);
+                let _ = write!(self.outf, "\x1b[48;5;{}m", bg);
 
-                write!(self.outf, "{}", cell.ch);
+                let _ = write!(self.outf, "{}", cell.ch);
 
                 // reset fg
                 // write!(self.outf, "\x1b[39m");
@@ -401,7 +419,7 @@ impl RustBox {
 
     pub fn poll_event(&mut self) -> Result<Event, std::io::Error> {
         let input_fd = self.inf.as_raw_fd();
-        let mut source = &mut self.inf;
+        let source = &mut self.inf;
 
         loop {
             let mut buf = [0u8; 2];
@@ -433,88 +451,18 @@ impl RustBox {
 
             return res;
         }
-        unreachable!("poll_event");
     }
 }
 
-fn select(nfds: i32, read_fds: &[i32]) {
-    extern "C" {
-        pub fn select(
-            nfds: c_int,
-            readfds: *mut fd_set,
-            writefds: *mut fd_set,
-            errorfds: *mut fd_set,
-            timeout: *mut timeval,
-        ) -> c_int;
-    }
-    unsafe {
-        select(
-            nfds,
-            read_fds.as_ptr() as *mut fd_set,
-            std::ptr::null_mut() as *mut fd_set,
-            std::ptr::null_mut() as *mut fd_set,
-            0 as *mut timeval,
-        );
-    }
-}
 
 impl Drop for RustBox {
     fn drop(&mut self) {
-        write!(self.outf, "{}", termcodes::ShowCursor);
-        write!(self.outf, "{}", termcodes::ClearScreen);
-        write!(self.outf, "{}", termcodes::ExitCa);
-        write!(self.outf, "{}", termcodes::ExitKeypad);
+        let _ = write!(self.outf, "{}", termcodes::ShowCursor);
+        let _ = write!(self.outf, "{}", termcodes::ClearScreen);
+        let _ = write!(self.outf, "{}", termcodes::ExitCa);
+        let _ = write!(self.outf, "{}", termcodes::ExitKeypad);
 
         set_terminal_attr(&self.orig_ios);
-    }
-}
-
-struct InputBuffer<R> {
-    source: R,
-    leftover: Option<u8>,
-}
-
-impl<R: Read> InputBuffer<R> {
-    fn new(source: R) -> InputBuffer<R> {
-        InputBuffer {
-            source: source,
-            leftover: None,
-        }
-    }
-}
-
-impl<R: Read> std::iter::Iterator for InputBuffer<R> {
-    type Item = Result<Event, std::io::Error>;
-
-    fn next(&mut self) -> Option<Result<Event, std::io::Error>> {
-        let mut buf = [0u8; 2];
-        let mut source = &mut self.source;
-
-        if let Some(c) = self.leftover {
-            self.leftover = None;
-            return Some(parse_item(c, &mut source.bytes()));
-        }
-
-        let res = match source.read(&mut buf) {
-            Ok(0) => return None,
-            Ok(1) => match buf[0] {
-                b'\x1b' => Ok(Event::Key(Key::Esc)),
-                _ => parse_item(buf[0], &mut source.bytes()),
-            },
-            Ok(2) => {
-                let mut option_iter = &mut Some(buf[1]).into_iter();
-                let result = {
-                    let mut iter = option_iter.map(|c| Ok(c)).chain(source.bytes());
-                    parse_item(buf[0], &mut iter)
-                };
-                self.leftover = option_iter.next();
-                result
-            }
-            Ok(_) => unreachable!(),
-            Err(e) => Err(e),
-        };
-
-        Some(res)
     }
 }
 
