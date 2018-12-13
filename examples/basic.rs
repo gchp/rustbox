@@ -1,12 +1,10 @@
 extern crate rustbox;
 
-use std::time::Duration;
 use std::thread::sleep;
-
+use std::time::Duration;
 
 use rustbox::RustBox;
-use rustbox::{Style, Color};
-
+use rustbox::{Color, Event, Key, Style};
 
 fn main() {
     let mut rustbox = RustBox::new();
@@ -19,5 +17,18 @@ fn main() {
     rustbox.print_char(2, 1, Style::Normal, Color::Black, Color::Red, 'y');
     rustbox.present();
 
-    sleep(Duration::new(2, 0));
+    rustbox.poll_event();
+
+    // loop {
+    //     match rustbox.poll_event() {
+    //         Ok(Event::Key(Key::Esc)) => break,
+    //         Ok(Event::Key(Key::Char(c))) => {
+    //             rustbox.print_char(10, 10, Style::Normal, Color::White, Color::Black, c);
+    //             rustbox.present();
+    //         }
+    //         _ => break,
+    //     }
+    // }
+
+    // sleep(Duration::new(2, 0));
 }

@@ -1,13 +1,14 @@
 extern crate libc;
 
-use std::mem;
-use std::fs::{OpenOptions, File};
-use std::io::{Read, Write};
-use std::os::unix::io::AsRawFd;
 use std::convert::From;
+use std::fs::{File, OpenOptions};
+use std::io::{BufReader, Read, Write};
+use std::mem;
+use std::os::unix::io::AsRawFd;
 
-use libc::termios;
 use libc::c_int;
+use libc::termios;
+use libc::{fd_set, timeval};
 
 macro_rules! build_term_code {
     ($name:ident, $code:expr) => {
@@ -18,8 +19,7 @@ macro_rules! build_term_code {
                 write!(f, concat!("\x1B[", $code))
             }
         }
-
-    }
+    };
 }
 
 mod termcodes {
@@ -43,7 +43,6 @@ mod termcodes {
         }
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum Key {
@@ -126,7 +125,7 @@ impl Key {
             65520 => Some(Key::End),
             65519 => Some(Key::PageUp),
             65518 => Some(Key::PageDown),
-            _     => None,
+            _ => None,
         }
     }
 }
@@ -160,12 +159,18 @@ impl BufferedFile {
         while written < len {
             match self.inner.write(&self.buf[written..]) {
                 Ok(0) => {
-                    ret = Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "failed to write data"));
+                    ret = Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "failed to write data",
+                    ));
                     break;
                 }
                 Ok(n) => written += n,
                 Err(ref e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(e) => { ret = Err(e); break }
+                Err(e) => {
+                    ret = Err(e);
+                    break;
+                }
             }
         }
         if written > 0 {
@@ -186,13 +191,11 @@ impl Write for BufferedFile {
     }
 }
 
-
 impl Drop for BufferedFile {
     fn drop(&mut self) {
         let _ = self.flush();
     }
 }
-
 
 pub fn get_terminal_attr() -> termios {
     extern "C" {
@@ -204,7 +207,6 @@ pub fn get_terminal_attr() -> termios {
         ios
     }
 }
-
 
 pub fn set_terminal_attr(t: &termios) -> i32 {
     extern "C" {
@@ -247,11 +249,11 @@ pub struct Cell {
     style: Style,
 }
 
-
-
 pub struct RustBox {
     orig_ios: termios,
     outf: BufferedFile,
+
+    leftover_input: Option<u8>,
     inf: File,
 
     input_buffer: String,
@@ -269,8 +271,14 @@ impl RustBox {
         let orig_ios = get_terminal_attr();
         let mut ios = get_terminal_attr();
 
-        ios.c_iflag &= !(libc::IGNBRK | libc::BRKINT | libc:: PARMRK | libc::ISTRIP
-                         | libc::INLCR | libc::IGNCR | libc::ICRNL | libc::IXON);
+        ios.c_iflag &= !(libc::IGNBRK
+            | libc::BRKINT
+            | libc::PARMRK
+            | libc::ISTRIP
+            | libc::INLCR
+            | libc::IGNCR
+            | libc::ICRNL
+            | libc::IXON);
         ios.c_oflag &= !libc::OPOST;
         ios.c_lflag &= !(libc::ECHO | libc::ECHONL | libc::ICANON | libc::ISIG | libc::IEXTEN);
         ios.c_cflag &= !(libc::CSIZE | libc::PARENB);
@@ -281,15 +289,23 @@ impl RustBox {
         let outf = OpenOptions::new().write(true).open("/dev/tty").unwrap();
         let inf = OpenOptions::new().read(true).open("/dev/tty").unwrap();
         // TODO(gchp): find out what this is about. See termbox tb_init.
-        unsafe { libc::tcsetattr(outf.as_raw_fd(), libc::TCSAFLUSH, &ios); }
+        unsafe {
+            libc::tcsetattr(outf.as_raw_fd(), libc::TCSAFLUSH, &ios);
+        }
 
-        let win_size = libc::winsize { ws_col: 0, ws_row: 0, ws_xpixel: 0, ws_ypixel: 0};
-        unsafe { libc::ioctl(outf.as_raw_fd(), libc::TIOCGWINSZ, &win_size); }
+        let win_size = libc::winsize {
+            ws_col: 0,
+            ws_row: 0,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        unsafe {
+            libc::ioctl(outf.as_raw_fd(), libc::TIOCGWINSZ, &win_size);
+        }
 
         let mut buffered_file = BufferedFile::new(outf);
 
         set_terminal_attr(&ios);
-
 
         write!(buffered_file, "{}", termcodes::EnterCa);
         write!(buffered_file, "{}", termcodes::EnterKeypad);
@@ -299,13 +315,16 @@ impl RustBox {
 
         let _ = buffered_file.flush();
 
-
-
         let mut back_buffer = Vec::new();
         for _i in 0..win_size.ws_row {
             let mut row = Vec::new();
             for _j in 0..win_size.ws_col {
-                row.push(Cell { ch: ' ', fg: Color::White, bg: Color::Black, style: Style::Normal })
+                row.push(Cell {
+                    ch: ' ',
+                    fg: Color::White,
+                    bg: Color::Black,
+                    style: Style::Normal,
+                })
             }
             back_buffer.push(row);
         }
@@ -316,6 +335,7 @@ impl RustBox {
             outf: buffered_file,
             inf: inf,
 
+            leftover_input: None,
             input_buffer: String::new(),
 
             front_buffer: back_buffer.clone(),
@@ -345,10 +365,18 @@ impl RustBox {
 
                 match cell.style {
                     Style::Normal => {}
-                    Style::Underline => { write!(self.outf, "\x1b[4m"); }
-                    Style::Bold => { write!(self.outf, "\x1b[1m"); }
-                    Style::Blink => { write!(self.outf, "\x1b[5m"); }
-                    Style::Reverse => { write!(self.outf, "\x1b[7m"); }
+                    Style::Underline => {
+                        write!(self.outf, "\x1b[4m");
+                    }
+                    Style::Bold => {
+                        write!(self.outf, "\x1b[1m");
+                    }
+                    Style::Blink => {
+                        write!(self.outf, "\x1b[5m");
+                    }
+                    Style::Reverse => {
+                        write!(self.outf, "\x1b[7m");
+                    }
                 }
 
                 // TODO(gchp): this currently assumes 256 colors
@@ -369,10 +397,66 @@ impl RustBox {
         }
 
         let _ = self.outf.flush();
+    }
 
+    pub fn poll_event(&mut self) -> Result<Event, std::io::Error> {
+        let input_fd = self.inf.as_raw_fd();
+        let mut source = &mut self.inf;
+
+        loop {
+            let mut buf = [0u8; 2];
+
+            if let Some(c) = self.leftover_input {
+                self.leftover_input = None;
+                return parse_item(c, &mut source.bytes());
+            }
+            select(input_fd + 1, &[input_fd]);
+
+            let res = match source.read(&mut buf) {
+                Ok(0) => continue,
+                Ok(1) => match buf[0] {
+                    b'\x1b' => Ok(Event::Key(Key::Esc)),
+                    _ => parse_item(buf[0], &mut source.bytes()),
+                },
+                Ok(2) => {
+                    let mut option_iter = &mut Some(buf[1]).into_iter();
+                    let result = {
+                        let mut iter = option_iter.map(|c| Ok(c)).chain(source.bytes());
+                        parse_item(buf[0], &mut iter)
+                    };
+                    self.leftover_input = option_iter.next();
+                    result
+                }
+                Ok(_) => unreachable!(),
+                Err(e) => Err(e),
+            };
+
+            return res;
+        }
+        unreachable!("poll_event");
     }
 }
 
+fn select(nfds: i32, read_fds: &[i32]) {
+    extern "C" {
+        pub fn select(
+            nfds: c_int,
+            readfds: *mut fd_set,
+            writefds: *mut fd_set,
+            errorfds: *mut fd_set,
+            timeout: *mut timeval,
+        ) -> c_int;
+    }
+    unsafe {
+        select(
+            nfds,
+            read_fds.as_ptr() as *mut fd_set,
+            std::ptr::null_mut() as *mut fd_set,
+            std::ptr::null_mut() as *mut fd_set,
+            0 as *mut timeval,
+        );
+    }
+}
 
 impl Drop for RustBox {
     fn drop(&mut self) {
@@ -385,13 +469,12 @@ impl Drop for RustBox {
     }
 }
 
-
 struct InputBuffer<R> {
     source: R,
     leftover: Option<u8>,
 }
 
-impl <R: Read> InputBuffer<R> {
+impl<R: Read> InputBuffer<R> {
     fn new(source: R) -> InputBuffer<R> {
         InputBuffer {
             source: source,
@@ -400,7 +483,7 @@ impl <R: Read> InputBuffer<R> {
     }
 }
 
-impl <R: Read> std::iter::Iterator for InputBuffer<R> {
+impl<R: Read> std::iter::Iterator for InputBuffer<R> {
     type Item = Result<Event, std::io::Error>;
 
     fn next(&mut self) -> Option<Result<Event, std::io::Error>> {
@@ -414,12 +497,10 @@ impl <R: Read> std::iter::Iterator for InputBuffer<R> {
 
         let res = match source.read(&mut buf) {
             Ok(0) => return None,
-            Ok(1) => {
-                match buf[0] {
-                    b'\x1b' => Ok(Event::Key(Key::Esc)),
-                    _ => parse_item(buf[0], &mut source.bytes()),
-                }
-            }
+            Ok(1) => match buf[0] {
+                b'\x1b' => Ok(Event::Key(Key::Esc)),
+                _ => parse_item(buf[0], &mut source.bytes()),
+            },
             Ok(2) => {
                 let mut option_iter = &mut Some(buf[1]).into_iter();
                 let result = {
@@ -438,38 +519,32 @@ impl <R: Read> std::iter::Iterator for InputBuffer<R> {
 }
 
 fn parse_item<I>(c: u8, iter: &mut I) -> Result<Event, std::io::Error>
-    where I: Iterator<Item = Result<u8, std::io::Error>>
+where
+    I: Iterator<Item = Result<u8, std::io::Error>>,
 {
     match c {
-        b'\x1B' => {
-            match iter.next() {
-                Some(Ok(b'[')) => {
-                    match iter.next() {
-                        Some(Ok(b'D')) => Ok(Event::Key(Key::Left)),
-                        Some(Ok(b'C')) => Ok(Event::Key(Key::Right)),
-                        Some(Ok(b'A')) => Ok(Event::Key(Key::Up)),
-                        Some(Ok(b'B')) => Ok(Event::Key(Key::Down)),
-                        Some(Ok(b'H')) => Ok(Event::Key(Key::Home)),
-                        Some(Ok(b'F')) => Ok(Event::Key(Key::End)),
-                        _ => unimplemented!(),
-                    }
-                }
+        b'\x1B' => match iter.next() {
+            Some(Ok(b'[')) => match iter.next() {
+                Some(Ok(b'D')) => Ok(Event::Key(Key::Left)),
+                Some(Ok(b'C')) => Ok(Event::Key(Key::Right)),
+                Some(Ok(b'A')) => Ok(Event::Key(Key::Up)),
+                Some(Ok(b'B')) => Ok(Event::Key(Key::Down)),
+                Some(Ok(b'H')) => Ok(Event::Key(Key::Home)),
+                Some(Ok(b'F')) => Ok(Event::Key(Key::End)),
+                _ => unimplemented!(),
+            },
 
-                c => unimplemented!("{:?}", c),
-            }
-
-        }
+            c => unimplemented!("{:?}", c),
+        },
         c if c.is_ascii_alphanumeric() => Ok(Event::Key(Key::Char(c as char))),
-        _ => { unimplemented!() }
+        _ => unimplemented!(),
     }
 }
 
-
-
 #[cfg(test)]
 mod test {
-    use std::io::Cursor;
     use super::*;
+    use std::io::Cursor;
 
     macro_rules! key_test {
         ($name:ident, $input:expr, $($keys:expr),*) => {
@@ -485,12 +560,14 @@ mod test {
     }
 
     key_test!(
-        test_input_double_key, "ab",
+        test_input_double_key,
+        "ab",
         Event::Key(Key::Char('a')),
         Event::Key(Key::Char('b'))
     );
     key_test!(
-        test_input_triple_key, "abc",
+        test_input_triple_key,
+        "abc",
         Event::Key(Key::Char('a')),
         Event::Key(Key::Char('b')),
         Event::Key(Key::Char('c'))
