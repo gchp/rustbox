@@ -30,36 +30,26 @@ git = "https://github.com/gchp/rustbox.git"
 Then, in your `src/example.rs`:
 
 ```rust
-extern crate rustbox;
-
 use std::error::Error;
 use std::default::Default;
 
-use rustbox::{Color, RustBox};
-use rustbox::Key;
+use rustbox::{self, Color, RustBox, Key};
 
-fn main() {
-    let rustbox = match RustBox::init(Default::default()) {
-        Result::Ok(v) => v,
-        Result::Err(e) => panic!("{}", e),
-    };
+fn main() -> Result<(), Box<Error>> {
+    let rustbox = RustBox::init(Default::default())?;
 
     rustbox.print(1, 1, rustbox::RB_BOLD, Color::White, Color::Black, "Hello, world!");
-    rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black,
-                  "Press 'q' to quit.");
+    rustbox.print(1, 3, rustbox::RB_BOLD, Color::White, Color::Black, "Press 'q' to quit.");
     rustbox.present();
+
     loop {
-        match rustbox.poll_event(false) {
-            Ok(rustbox::Event::KeyEvent(key)) => {
-                match key {
-                    Key::Char('q') => { break; }
-                    _ => { }
-                }
-            },
-            Err(e) => panic!("{}", e.description()),
-            _ => { }
+        match rustbox.poll_event(false)? {
+            rustbox::Event::KeyEvent(Key::Char('q')) => { break; },
+            _ => {  },
         }
     }
+
+    Ok(())
 }
 ```
 
