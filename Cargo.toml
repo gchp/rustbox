@@ -16,9 +16,6 @@ exclude = [
     "examples/*"
 ]
 
-[lib]
-name = "rustbox"
-
 [dependencies]
 bitflags = "0.2.1"
 termbox-sys = "0.2.9"
