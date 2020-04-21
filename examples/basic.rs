@@ -1,7 +1,7 @@
 extern crate rustbox;
 
-use std::thread::sleep;
-use std::time::Duration;
+
+
 
 use rustbox::RustBox;
 use rustbox::{Color, Event, Key, Style};

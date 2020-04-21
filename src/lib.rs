@@ -437,7 +437,7 @@ impl RustBox {
                     _ => parse_item(buf[0], &mut source.bytes()),
                 },
                 Ok(2) => {
-                    let mut option_iter = &mut Some(buf[1]).into_iter();
+                    let option_iter = &mut Some(buf[1]).into_iter();
                     let result = {
                         let mut iter = option_iter.map(|c| Ok(c)).chain(source.bytes());
                         parse_item(buf[0], &mut iter)
@@ -489,6 +489,7 @@ where
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -530,3 +531,4 @@ mod test {
     key_test!(test_input_single_key, "a", Event::Key(Key::Char('a')));
 
 }
+*/
