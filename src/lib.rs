@@ -7,7 +7,6 @@ use std::os::unix::io::AsRawFd;
 
 use libc::c_int;
 use libc::termios;
-use libc::{fd_set, timeval};
 
 macro_rules! build_term_code {
     ($name:ident, $code:expr) => {
@@ -196,27 +195,6 @@ impl Drop for BufferedFile {
     }
 }
 
-fn select(nfds: i32, read_fds: &[i32]) {
-    extern "C" {
-        pub fn select(
-            nfds: c_int,
-            readfds: *mut fd_set,
-            writefds: *mut fd_set,
-            errorfds: *mut fd_set,
-            timeout: *mut timeval,
-        ) -> c_int;
-    }
-    unsafe {
-        select(
-            nfds,
-            read_fds.as_ptr() as *mut fd_set,
-            std::ptr::null_mut() as *mut fd_set,
-            std::ptr::null_mut() as *mut fd_set,
-            0 as *mut timeval,
-        );
-    }
-}
-
 pub fn get_terminal_attr() -> termios {
     extern "C" {
         pub fn tcgetattr(fd: c_int, termptr: *const termios) -> c_int;
@@ -279,7 +257,7 @@ impl Color {
 
     pub fn as_fg_str(&self) -> String {
         if self == &Color::Default {
-            format!("\x1b[39m")
+            "\x1b[39m".to_string()
         } else {
             format!("\x1b[38;5;{}m", self.as_256_color())
         }
@@ -287,7 +265,7 @@ impl Color {
 
     pub fn as_bg_str(&self) -> String {
         if self == &Color::Default {
-            format!("\x1b[49m")
+            "\x1b[49m".to_string()
         } else {
             format!("\x1b[48;5;{}m", self.as_256_color())
         }
@@ -310,8 +288,8 @@ pub struct RustBox {
 
     back_buffer: Vec<Vec<Cell>>,
 
-    width: u16,
-    height: u16,
+    _width: u16,
+    _height: u16,
 }
 
 impl RustBox {
@@ -387,8 +365,8 @@ impl RustBox {
 
             back_buffer: back_buffer,
 
-            width: win_size.ws_col,
-            height: win_size.ws_row,
+            _width: win_size.ws_col,
+            _height: win_size.ws_row,
         }
     }
 
@@ -402,8 +380,6 @@ impl RustBox {
     }
 
     pub fn present(&mut self) {
-        // TODO(gchp): do we need multiple buffers here?
-
         for (i, _row) in self.back_buffer.iter().enumerate() {
             for cell in &self.back_buffer[i] {
                 // reset
@@ -423,7 +399,6 @@ impl RustBox {
     }
 
     pub fn poll_event(&mut self) -> Result<Event, std::io::Error> {
-        let input_fd = self.inf.as_raw_fd();
         let source = &mut self.inf;
 
         loop {
@@ -433,7 +408,6 @@ impl RustBox {
                 self.leftover_input = None;
                 return parse_item(c, &mut source.bytes());
             }
-            select(input_fd + 1, &[input_fd]);
 
             let res = match source.read(&mut buf) {
                 Ok(0) => continue,
@@ -444,7 +418,7 @@ impl RustBox {
                 Ok(2) => {
                     let option_iter = &mut Some(buf[1]).into_iter();
                     let result = {
-                        let mut iter = option_iter.map(|c| Ok(c)).chain(source.bytes());
+                        let mut iter = option_iter.map(Ok).chain(source.bytes());
                         parse_item(buf[0], &mut iter)
                     };
                     self.leftover_input = option_iter.next();
