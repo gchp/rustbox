@@ -244,8 +244,21 @@ pub enum Style {
     Reverse,
 }
 
-#[derive(Copy, Clone)]
+impl Style {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Style::Normal => None,
+            Style::Underline => Some("\x1b[4m"),
+            Style::Bold => Some("\x1b[1m"),
+            Style::Blink => Some("\x1b[5m"),
+            Style::Reverse => Some("\x1b[7m"),
+        }
+    }
+}
+
+#[derive(PartialEq)]
 pub enum Color {
+    Default,
     Black,
     Red,
     White,
@@ -254,14 +267,33 @@ pub enum Color {
 impl Color {
     pub fn as_256_color(&self) -> u16 {
         match self {
+            // TODO(gchp): find a better way to do this
+            // special case Default to be handled in the as_*_str methods below
+            Color::Default => 999,
+
             Color::Black => 0,
             Color::Red => 1,
             Color::White => 7,
         }
     }
+
+    pub fn as_fg_str(&self) -> String {
+        if self == &Color::Default {
+            format!("\x1b[39m")
+        } else {
+            format!("\x1b[38;5;{}m", self.as_256_color())
+        }
+    }
+
+    pub fn as_bg_str(&self) -> String {
+        if self == &Color::Default {
+            format!("\x1b[49m")
+        } else {
+            format!("\x1b[48;5;{}m", self.as_256_color())
+        }
+    }
 }
 
-#[derive(Copy, Clone)]
 pub struct Cell {
     ch: char,
     bg: Color,
@@ -276,8 +308,6 @@ pub struct RustBox {
     leftover_input: Option<u8>,
     inf: File,
 
-    // TODO(gchp): do we need two buffers?
-    front_buffer: Vec<Vec<Cell>>,
     back_buffer: Vec<Vec<Cell>>,
 
     width: u16,
@@ -339,8 +369,8 @@ impl RustBox {
             for _j in 0..win_size.ws_col {
                 row.push(Cell {
                     ch: ' ',
-                    fg: Color::White,
-                    bg: Color::Black,
+                    fg: Color::Default,
+                    bg: Color::Default,
                     style: Style::Normal,
                 })
             }
@@ -355,7 +385,6 @@ impl RustBox {
 
             leftover_input: None,
 
-            front_buffer: back_buffer.clone(),
             back_buffer: back_buffer,
 
             width: win_size.ws_col,
@@ -374,43 +403,19 @@ impl RustBox {
 
     pub fn present(&mut self) {
         // TODO(gchp): do we need multiple buffers here?
-        self.front_buffer = self.back_buffer.clone();
 
-        for (i, _row) in self.front_buffer.iter().enumerate() {
-            for cell in &self.front_buffer[i] {
+        for (i, _row) in self.back_buffer.iter().enumerate() {
+            for cell in &self.back_buffer[i] {
                 // reset
                 let _ = write!(self.outf, "{}", termcodes::SGR0);
 
-                match cell.style {
-                    Style::Normal => {}
-                    Style::Underline => {
-                        let _ = write!(self.outf, "\x1b[4m");
-                    }
-                    Style::Bold => {
-                        let _ = write!(self.outf, "\x1b[1m");
-                    }
-                    Style::Blink => {
-                        let _ = write!(self.outf, "\x1b[5m");
-                    }
-                    Style::Reverse => {
-                        let _ = write!(self.outf, "\x1b[7m");
-                    }
+                if let Some(style) = cell.style.as_str() {
+                    let _ = write!(self.outf, "{}", style);
                 }
 
-                // TODO(gchp): this currently assumes 256 colors
-                let fg = cell.fg.as_256_color() & 0xFF;
-                let bg = cell.bg.as_256_color() & 0xFF;
-
-                let _ = write!(self.outf, "\x1b[38;5;{}m", fg);
-                let _ = write!(self.outf, "\x1b[48;5;{}m", bg);
-
+                let _ = write!(self.outf, "{}", cell.fg.as_fg_str());
+                let _ = write!(self.outf, "{}", cell.bg.as_bg_str());
                 let _ = write!(self.outf, "{}", cell.ch);
-
-                // reset fg
-                // write!(self.outf, "\x1b[39m");
-
-                // reset bg
-                // write!(self.outf, "\x1b[49m");
             }
         }
 
@@ -453,7 +458,6 @@ impl RustBox {
         }
     }
 }
-
 
 impl Drop for RustBox {
     fn drop(&mut self) {

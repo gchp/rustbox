@@ -1,8 +1,5 @@
 extern crate rustbox;
 
-
-
-
 use rustbox::RustBox;
 use rustbox::{Color, Event, Key, Style};
 
@@ -15,9 +12,8 @@ fn main() {
     rustbox.print_char(4, 0, Style::Reverse, Color::White, Color::Black, 'y');
     rustbox.print_char(1, 1, Style::Normal, Color::Red, Color::Black, 'y');
     rustbox.print_char(2, 1, Style::Normal, Color::Black, Color::Red, 'y');
+    rustbox.print_char(2, 1, Style::Normal, Color::Default, Color::Default, 'y');
     rustbox.present();
-
-    // rustbox.poll_event();
 
     loop {
         match rustbox.poll_event() {
@@ -29,6 +25,4 @@ fn main() {
             _ => break,
         }
     }
-
-    // sleep(Duration::new(2, 0));
 }
